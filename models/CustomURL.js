@@ -8,10 +8,18 @@ const customURLSchema = new mongoose.Schema({
     required: true,
     unique: true,
   },
+
+  companyName: {
+    type: String,
+    required: true,
+    trim: true,
+  },
+
   url: {
     type: String,
     required: true,
   },
+
   createdAt: {
     type: Date,
     default: Date.now,
