@@ -21,7 +21,8 @@ app.use(cors({
   origin: [
     'http://localhost:3000',
     'https://admin.infravion.com',   // frontend (example)
-    'https://infravion.com'
+    'https://infravion.com',
+    "https://qr-review-system-fronmtend-7kye.vercel.app"
   ],
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
   credentials: true,
@@ -43,6 +44,7 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
 
 
 
