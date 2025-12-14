@@ -6,39 +6,53 @@ import QrImage from "../models/QrImage.js";
 
 const router = express.Router();
 
-// CREATE / SET OR UPDATE custom URL + company name
+// CREATE / SET OR UPDATE custom URL + company name + redirect setting
 router.post("/set-url", authMiddleware, async (req, res) => {
-  const { url, companyName } = req.body;
-
-  if (!url) return res.status(400).json({ success: false, message: "URL is required" });
-  if (!companyName) return res.status(400).json({ success: false, message: "Company name is required" });
-
+  const { url, companyName, redirectFromRating } = req.body;
+  if (!url)
+    return res.status(400).json({ success: false, message: "URL is required" });
+  if (!companyName)
+    return res.status(400).json({ success: false, message: "Company name is required" });
+  if (
+    redirectFromRating !== undefined &&
+    (redirectFromRating < 1 || redirectFromRating > 5)
+  ) {
+    return res.status(400).json({
+      success: false,
+      message: "redirectFromRating must be between 1 to 5",
+    });
+  }
   try {
     let existing = await CustomURL.findOne({ user: req.user._id });
 
     if (existing) {
       existing.url = url;
       existing.companyName = companyName;
+
+      if (redirectFromRating !== undefined) {
+        existing.redirectFromRating = redirectFromRating;
+      }
+
       await existing.save();
     } else {
-      existing = await CustomURL.create({ 
-        user: req.user._id, 
-        url, 
-        companyName 
+      existing = await CustomURL.create({
+        user: req.user._id,
+        url,
+        companyName,
+        redirectFromRating: redirectFromRating ?? 3,
       });
     }
 
-    res.json({ 
-      success: true, 
-      message: "Custom URL & Company Name saved", 
-      data: existing 
+    res.json({
+      success: true,
+      message: "Custom URL & redirect setting saved successfully",
+      data: existing,
     });
-
   } catch (err) {
-    console.error(err);
     res.status(500).json({ success: false, message: err.message });
   }
 });
+
 
 
 //  READ / Get URL & Company Name by qrId
@@ -52,13 +66,14 @@ router.get("/get-url/:qrId", async (req, res) => {
     const customURL = await CustomURL.findOne({ user: qr.user });
     if (!customURL) return res.status(404).json({ success: false, message: "No custom URL set for this QR" });
 
-    res.json({ 
-      success: true, 
-      data: { 
-        url: customURL.url,
-        companyName: customURL.companyName 
-      } 
-    });
+  res.json({
+  success: true,
+  data: {
+    url: customURL.url,
+    companyName: customURL.companyName,
+    redirectFromRating: customURL.redirectFromRating,
+  },
+});
 
   } catch (err) {
     console.error("Error fetching custom URL:", err);
@@ -69,26 +84,49 @@ router.get("/get-url/:qrId", async (req, res) => {
 
 // UPDATE / Update URL & company name for logged-in user
 router.put("/update-url", authMiddleware, async (req, res) => {
-  const { url, companyName } = req.body;
+  const { url, companyName, redirectFromRating } = req.body;
 
-  if (!url) return res.status(400).json({ success: false, message: "URL is required" });
-  if (!companyName) return res.status(400).json({ success: false, message: "Company name is required" });
+  if (!url)
+    return res.status(400).json({ success: false, message: "URL is required" });
+
+  if (!companyName)
+    return res.status(400).json({ success: false, message: "Company name is required" });
+
+  if (
+    redirectFromRating !== undefined &&
+    (redirectFromRating < 1 || redirectFromRating > 5)
+  ) {
+    return res.status(400).json({
+      success: false,
+      message: "redirectFromRating must be between 1 to 5",
+    });
+  }
 
   try {
     const customURL = await CustomURL.findOne({ user: req.user._id });
-    if (!customURL) 
-      return res.status(404).json({ success: false, message: "No custom URL found" });
+
+    if (!customURL) {
+      return res.status(404).json({
+        success: false,
+        message: "No custom URL found",
+      });
+    }
 
     customURL.url = url;
     customURL.companyName = companyName;
+
+    // redirect setting update
+    if (redirectFromRating !== undefined) {
+      customURL.redirectFromRating = redirectFromRating;
+    }
+
     await customURL.save();
 
-    res.json({ 
-      success: true, 
-      message: "Custom URL & Company Name updated", 
-      data: customURL 
+    res.json({
+      success: true,
+      message: "Custom URL, Company Name & Redirect setting updated",
+      data: customURL,
     });
-
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: err.message });
@@ -96,12 +134,13 @@ router.put("/update-url", authMiddleware, async (req, res) => {
 });
 
 
+
 // DELETE / Delete URL + company name
 router.delete("/delete-url", authMiddleware, async (req, res) => {
   try {
     const customURL = await CustomURL.findOne({ user: req.user._id });
 
-    if (!customURL) 
+    if (!customURL)
       return res.status(404).json({ success: false, message: "No custom URL found" });
 
     await CustomURL.deleteOne({ _id: customURL._id });
@@ -124,13 +163,15 @@ router.get("/get-url", authMiddleware, async (req, res) => {
       return res.status(404).json({ success: false, message: "No custom URL set yet" });
     }
 
-    res.json({ 
-      success: true, 
-      data: { 
+    res.json({
+      success: true,
+      data: {
         url: customURL.url,
-        companyName: customURL.companyName 
-      } 
+        companyName: customURL.companyName,
+        redirectFromRating: customURL.redirectFromRating,
+      },
     });
+
 
   } catch (err) {
     console.error("Error fetching custom URL:", err);

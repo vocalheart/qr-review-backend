@@ -18,10 +18,11 @@ connectDB();
 
 // CORS setup
 app.use(cors({
-  origin: ['https://qrreviewussystem.netlify.app', "https://qr-review-system-fronmtend.vercel.app"],
+  origin: ['http://localhost:3000'],
   methods: ['GET', 'PUT', 'POST', 'PATCH', 'DELETE'],
   credentials: true , // important for cookies
 }));
+
 // Routes
 app.use('/api', signupAuth);
 app.use('/api', upload);
@@ -33,7 +34,5 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(` Server is running on port ${PORT}`);
 });
-
-
 
 

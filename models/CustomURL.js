@@ -19,6 +19,12 @@ const customURLSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  redirectFromRating: {
+    type: Number,
+    default: 3,
+    min: 1,
+    max: 5
+  },
 
   createdAt: {
     type: Date,
