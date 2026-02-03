@@ -131,18 +131,14 @@ router.put("/update-url", authMiddleware, async (req, res) => {
 
 
 
-// DELETE / Delete URL + company name
+// DELETE // Delete URL + company name
 router.delete("/delete-url", authMiddleware, async (req, res) => {
   try {
     const customURL = await CustomURL.findOne({ user: req.user._id });
-
     if (!customURL)
       return res.status(404).json({ success: false, message: "No custom URL found" });
-
     await CustomURL.deleteOne({ _id: customURL._id });
-
     res.json({ success: true, message: "Custom URL deleted successfully" });
-
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: err.message });
@@ -154,7 +150,6 @@ router.delete("/delete-url", authMiddleware, async (req, res) => {
 router.get("/get-url", authMiddleware, async (req, res) => {
   try {
     const customURL = await CustomURL.findOne({ user: req.user._id });
-
     if (!customURL) {
       return res.status(404).json({ success: false, message: "No custom URL set yet" });
     }

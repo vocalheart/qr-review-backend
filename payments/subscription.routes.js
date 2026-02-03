@@ -7,28 +7,28 @@ import { authMiddleware } from "../middleware/authMiddleware.js";
 const router = express.Router();
 
 /* ======================================================
-   1 ADMIN ONLY – CREATE PLAN (ONE TIME)
+   1️ ADMIN – CREATE PLAN (ONE TIME ONLY)
    ====================================================== */
 router.post("/admin/create-plan", authMiddleware, async (req, res) => {
   try {
-    // optional: role check
     if (req.user.role !== "admin") {
       return res.status(403).json({
         success: false,
         message: "Admin access only",
       });
     }
+
     const plan = await razorpay.plans.create({
       period: "monthly",
       interval: 1,
       item: {
         name: "Pro Subscription",
-        amount: 1999 * 100, // ₹1999
+        amount: 1999 * 100,
         currency: "INR",
         description: "Monthly Pro Plan",
       },
     });
-    // PLAN ID ko env / db me save karo
+
     res.json({ success: true, plan });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -36,36 +36,53 @@ router.post("/admin/create-plan", authMiddleware, async (req, res) => {
 });
 
 /* ======================================================
-   2 USER – CREATE SUBSCRIPTION
+   2️ USER – CREATE SUBSCRIPTION (WITH 5-MIN RULE)
    ====================================================== */
 router.post("/create-subscription", authMiddleware, async (req, res) => {
   try {
-    // user already active subscription?
     const existing = await Payment.findOne({
       userId: req.user._id,
       type: "subscription",
-      status: { $in: ["active", "created"] },
+      status: "created",
     });
+
+    //  5 minutes = 300000 ms
     if (existing) {
-      return res.status(400).json({
-        success: false,
-        message: "Subscription already exists",
-      });
+      const timeDiff = Date.now() - new Date(existing.createdAt).getTime();
+
+      if (timeDiff < 5 * 60 * 1000) {
+        return res.status(400).json({
+          success: false,
+          message: "Previous subscription pending. Please complete payment.",
+        });
+      }
+
+      //  timeout crossed → cancel old subscription
+      await razorpay.subscriptions.cancel(existing.subscriptionId);
+
+      await Payment.updateOne(
+        { _id: existing._id },
+        { status: "failed" }
+      );
     }
+
+    //  create fresh subscription
     const subscription = await razorpay.subscriptions.create({
-      plan_id: process.env.RAZORPAY_PRO_PLAN_ID, // SAME for all users
+      plan_id: process.env.RAZORPAY_PRO_PLAN_ID,
       customer_notify: 1,
       total_count: 12,
     });
+
     await Payment.create({
       userId: req.user._id,
       subscriptionId: subscription.id,
       planId: process.env.RAZORPAY_PRO_PLAN_ID,
-      type: "subscription",          //  IMPORTANT
-      status: "created",             // active webhook se hoga
+      type: "subscription",
+      status: "created",
       amount: 1999,
       currency: "INR",
     });
+
     res.json({ success: true, subscription });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -73,34 +90,43 @@ router.post("/create-subscription", authMiddleware, async (req, res) => {
 });
 
 /* ======================================================
-        3️ RAZORPAY WEBHOOK (MANDATORY)
+   3️ RAZORPAY WEBHOOK (MANDATORY)
    ====================================================== */
-router.post("/webhook",  express.raw({ type: "application/json" }), async (req, res) => {
+router.post(
+  "/subscription-webhook",
+  express.raw({ type: "application/json" }),
+  async (req, res) => {
     try {
       const signature = req.headers["x-razorpay-signature"];
       const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
+
       const expectedSignature = crypto
         .createHmac("sha256", secret)
         .update(req.body)
         .digest("hex");
+
       if (signature !== expectedSignature) {
         return res.status(400).json({ success: false });
       }
+
       const event = JSON.parse(req.body.toString());
-      // subscription activated
+
+      // ✅ payment successful
       if (event.event === "subscription.activated") {
         await Payment.findOneAndUpdate(
           { subscriptionId: event.payload.subscription.entity.id },
           { status: "active" }
         );
       }
-      // subscription cancelled
+
+      // ❌ subscription cancelled
       if (event.event === "subscription.cancelled") {
         await Payment.findOneAndUpdate(
           { subscriptionId: event.payload.subscription.entity.id },
           { status: "cancelled" }
         );
       }
+
       res.json({ status: "ok" });
     } catch (err) {
       res.status(500).json({ success: false });
