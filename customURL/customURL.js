@@ -4,6 +4,8 @@ import express from "express";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 import CustomURL from "../models/CustomURL.js";
 import QrImage from "../models/QrImage.js";
+import LogoImage from "../models/LogoImage.js";
+
 
 const router = express.Router();
 
@@ -25,7 +27,6 @@ router.post("/set-url", authMiddleware, async (req, res) => {
   }
   try {
     let existing = await CustomURL.findOne({ user: req.user._id });
-
     if (existing) {
       existing.url = url;
       existing.companyName = companyName;
@@ -52,30 +53,44 @@ router.post("/set-url", authMiddleware, async (req, res) => {
   }
 });
 
-//  READ / Get URL & Company Name by qrId
+// READ / Get URL, Company Name & Logo by qrId
 router.get("/get-url/:qrId", async (req, res) => {
   const { qrId } = req.params;
 
   try {
+    // 1. Find QR
     const qr = await QrImage.findOne({ randomId: qrId });
-    if (!qr) return res.status(404).json({ success: false, message: "QR not found" });
+    if (!qr) {
+      return res.status(404).json({
+        success: false,
+        message: "QR not found",
+      });
+    }
 
+    // 2. Find Custom URL by user
     const customURL = await CustomURL.findOne({ user: qr.user });
-    if (!customURL) return res.status(404).json({ success: false, message: "No custom URL set for this QR" });
-
-  res.json({
-  success: true,
-  data: {
-    url: customURL.url,
-    companyName: customURL.companyName,
-    redirectFromRating: customURL.redirectFromRating,
-  },
-});
+    if (!customURL) {return res.status(404).json({success: false, message: "No custom URL set for this QR"});
+    }
+    // 3. Find Logo by same user
+    const logo = await LogoImage.findOne({ user: qr.user });
+    res.json({
+      success: true,
+      data: {
+        url: customURL.url,
+        companyName: customURL.companyName,
+        redirectFromRating: customURL.redirectFromRating,
+        logoUrl: logo ? logo.logoUrl : null, // or logo.imageUrl
+      },
+    });
   } catch (err) {
     console.error("Error fetching custom URL:", err);
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
   }
 });
+
 
 
 // UPDATE / Update URL & company name for logged-in user
@@ -100,17 +115,14 @@ router.put("/update-url", authMiddleware, async (req, res) => {
 
   try {
     const customURL = await CustomURL.findOne({ user: req.user._id });
-
     if (!customURL) {
       return res.status(404).json({
         success: false,
         message: "No custom URL found",
       });
     }
-
     customURL.url = url;
     customURL.companyName = companyName;
-
     // redirect setting update
     if (redirectFromRating !== undefined) {
       customURL.redirectFromRating = redirectFromRating;
@@ -129,8 +141,6 @@ router.put("/update-url", authMiddleware, async (req, res) => {
   }
 });
 
-
-
 // DELETE // Delete URL + company name
 router.delete("/delete-url", authMiddleware, async (req, res) => {
   try {
@@ -144,15 +154,19 @@ router.delete("/delete-url", authMiddleware, async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 });
-
-
 // GET custom URL + company name of logged-in user
 router.get("/get-url", authMiddleware, async (req, res) => {
   try {
     const customURL = await CustomURL.findOne({ user: req.user._id });
+
     if (!customURL) {
-      return res.status(404).json({ success: false, message: "No custom URL set yet" });
+      return res
+        .status(404)
+        .json({ success: false, message: "No custom URL set yet" });
     }
+
+    // Fetch logo separately
+    const logo = await LogoImage.findOne({ user: req.user._id });
 
     res.json({
       success: true,
@@ -160,10 +174,11 @@ router.get("/get-url", authMiddleware, async (req, res) => {
         url: customURL.url,
         companyName: customURL.companyName,
         redirectFromRating: customURL.redirectFromRating,
+        logoUrl: logo ? logo.logoUrl : null,
       },
     });
   } catch (err) {
-    console.error("Error fetching custom URL:", err);
+    console.error("Error fetching custom URL + logo:", err);
     res.status(500).json({ success: false, message: err.message });
   }
 });

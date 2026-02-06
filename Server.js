@@ -6,7 +6,9 @@ import cookieParser from "cookie-parser";
 import upload from './upload/upload.js';
 import customURLRoutes from "./customURL/customURL.js";
 import feedbackRoutes from "./feedbackRoutes/feedbackRoutes.js";
-import payment from './payments/subscription.routes.js'
+import payment from './payments/subscription.routes.js';
+import uploadLogo from './customURL/logoUpload.js';
+
 const app = express();
 
 // Middlewaress
@@ -34,6 +36,9 @@ app.use('/api', upload);
 app.use('/api', feedbackRoutes);
 app.use('/api/custom-url', customURLRoutes);
 app.use('/api' , payment)
+app.use('/api/form' , uploadLogo);
+
+
 // Health check
 app.get('/', async (req, res) => {
   res.status(200).send("Server is running ");
@@ -41,9 +46,12 @@ app.get('/', async (req, res) => {
 
 // Server
 const PORT = process.env.PORT || 5000;
+
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
+
 
 
 
