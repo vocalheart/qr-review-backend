@@ -3,7 +3,7 @@ import express from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import Signup from "../models/UserScema.js";
-import { sendMail } from "../mailes/transporter.js";
+import { sendMail } from "../mailes/transporter.js"; 
 
 const router = express.Router();
 
@@ -80,14 +80,15 @@ router.get("/auth/me", verifyToken, async (req, res) => {
 
 // --------- Logout ----------- //
 router.post("/logout", (req, res) => {
-  // Logout
   res.clearCookie("token", {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+    path: "/",
   });
-  res.json({ message: "Logout successful" });
+  res.status(200).json({ message: "Logout successful" });
 });
+
 
 // --- Get Profile ---
 router.get("/profile", verifyToken, async (req, res) => {

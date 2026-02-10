@@ -23,7 +23,7 @@ router.post("/admin/create-plan", authMiddleware, async (req, res) => {
       interval: 1,
       item: {
         name: "Pro Subscription",
-        amount: 1999 * 100,
+        amount: 2 * 100,
         currency: "INR",
         description: "Monthly Pro Plan",
       },
@@ -81,7 +81,7 @@ router.post("/create-subscription", authMiddleware, async (req, res) => {
       planId: process.env.RAZORPAY_PRO_PLAN_ID,
       type: "subscription",
       status: "created",
-      amount: 1999,
+      amount: 2,
       currency: "INR",
       shortUrl: subscription.short_url,
     });
