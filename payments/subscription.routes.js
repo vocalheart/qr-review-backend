@@ -5,35 +5,33 @@ import Payment from "../models/Payment.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
-
 /* ======================================================
-   ADMIN – CREATE PLAN
-====================================================== */
+    ADMIN – CREATE 3-DAY TRIAL PLAN (ONE TIME)
+   ====================================================== */
 router.post("/admin/create-plan", authMiddleware, async (req, res) => {
   try {
+    // enable in production
     // if (req.user.role !== "admin") {
     //   return res.status(403).json({ success: false, message: "Admin only" });
     // }
 
-    const { name, amount, interval, period } = req.body;
-
     const plan = await razorpay.plans.create({
-      period: period || "daily",
-      interval: interval || 3,
+      period: "daily",
+      interval: 3, // 3 days
       item: {
-        name: name || "3-Day Trial",
-        amount: amount || 200,
+        name: "3-Day Trial Subscription",
+        amount: 200, // ₹2 in paise
         currency: "INR",
-        description: "Subscription Plan",
+        description: "3-Day Trial Plan - ₹2",
       },
     });
 
     res.json({ success: true, plan });
-
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 });
+
 
 /* ======================================================
    ADMIN – GET ALL PLANS
@@ -47,54 +45,94 @@ router.get("/admin/get-plans", authMiddleware, async (req, res) => {
   }
 });
 
+
 /* ======================================================
-   USER – CREATE SUBSCRIPTION (Dynamic Plan)
-====================================================== */
+    USER – CREATE SUBSCRIPTION (5-MIN RULE)
+   ====================================================== */
 router.post("/create-subscription", authMiddleware, async (req, res) => {
   try {
-    const { planId } = req.body;
-
-    if (!planId) {
-      return res.status(400).json({ success: false, message: "Plan ID required" });
-    }
-
-    const active = await Payment.findOne({
+    // Check for active subscription
+    const activeSubscription = await Payment.findOne({
       userId: req.user._id,
       type: "subscription",
       status: "active",
     });
 
-    if (active) {
+    if (activeSubscription) {
       return res.status(400).json({
         success: false,
-        message: "Active subscription already exists",
+        message: "You already have an active subscription",
+        subscription: {
+          status: "active",
+          currentEnd: activeSubscription.currentEnd,
+          daysRemaining: Math.ceil(
+            (new Date(activeSubscription.currentEnd) - new Date()) /
+              (1000 * 60 * 60 * 24)
+          ),
+        },
       });
     }
 
+    // Check for pending subscription
+    const existing = await Payment.findOne({
+      userId: req.user._id,
+      type: "subscription",
+      status: "created",
+    });
+
+    if (existing) {
+      const timeDiff = Date.now() - existing.createdAt.getTime();
+
+      // Reuse same payment link (5 min)
+      if (timeDiff < 5 * 60 * 1000) {
+        return res.json({
+          success: true,
+          subscription: {
+            short_url: existing.shortUrl,
+            status: "pending",
+          },
+        });
+      }
+
+      // Expire old subscription
+      if (existing.subscriptionId) {
+        try {
+          await razorpay.subscriptions.cancel(existing.subscriptionId);
+        } catch (err) {
+          console.log("Could not cancel old subscription:", err.message);
+        }
+      }
+
+      await Payment.updateOne({ _id: existing._id }, { status: "failed" });
+    }
+
+    // Create new subscription
     const subscription = await razorpay.subscriptions.create({
-      plan_id: planId,
+      plan_id: process.env.RAZORPAY_PRO_PLAN_ID,
       customer_notify: 1,
-      total_count: 1,
+      total_count: 1, // 1 billing cycle only (3 days)
     });
 
     await Payment.create({
       userId: req.user._id,
       subscriptionId: subscription.id,
-      planId: planId,
+      planId: process.env.RAZORPAY_PRO_PLAN_ID,
       shortUrl: subscription.short_url,
       type: "subscription",
-      amount: subscription.plan.item.amount,
-      currency: subscription.plan.item.currency,
+      status: "created",
+      amount: 200, // ₹2 in paise
+      currency: "INR",
     });
 
     res.json({ success: true, subscription });
-
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 });
 
-
+/* ======================================================
+    USER – CHECK SUBSCRIPTION STATUS
+   ====================================================== */
 router.get("/subscription-status", authMiddleware, async (req, res) => {
   try {
     const sub = await Payment.findOne({
@@ -103,14 +141,34 @@ router.get("/subscription-status", authMiddleware, async (req, res) => {
     }).sort({ createdAt: -1 });
 
     if (!sub) {
-      return res.json({ success: true, status: "none" });
+      return res.json({
+        success: true,
+        status: "none",
+        planId: null,
+        message: "No subscription found",
+      });
     }
-
     let daysRemaining = 0;
+    let hoursRemaining = 0;
 
     if (sub.status === "active" && sub.currentEnd) {
-      const diff = sub.currentEnd - new Date();
-      daysRemaining = Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+      const now = new Date();
+      const endDate = new Date(sub.currentEnd);
+      const diffMs = endDate - now;
+
+      if (diffMs > 0) {
+        daysRemaining = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+        hoursRemaining = Math.ceil(diffMs / (1000 * 60 * 60));
+      } else {
+        // Subscription expired
+        await Payment.updateOne({ _id: sub._id }, { status: "cancelled" });
+        return res.json({
+          success: true,
+          status: "expired",
+          planId: sub.planId,
+          message: "Your subscription has expired",
+        });
+      }
     }
 
     res.json({
@@ -120,12 +178,12 @@ router.get("/subscription-status", authMiddleware, async (req, res) => {
       currentStart: sub.currentStart,
       currentEnd: sub.currentEnd,
       daysRemaining,
+      hoursRemaining,
+      subscriptionId: sub.subscriptionId,
     });
-
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 });
 
-
-export default router
+export default router;

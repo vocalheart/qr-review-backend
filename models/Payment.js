@@ -1,5 +1,3 @@
-// models/Payment.js
-
 import mongoose from "mongoose";
 
 const paymentSchema = new mongoose.Schema(
@@ -16,16 +14,12 @@ const paymentSchema = new mongoose.Schema(
     signature: String,
 
     // ===== SUBSCRIPTION =====
-    subscriptionId: {
-      type: String,
-      index: true,
-    },
-
+    subscriptionId: String,
     planId: String,
     shortUrl: String,
 
     amount: {
-      type: Number,
+      type: Number, // paise
       required: true,
     },
 
@@ -42,14 +36,7 @@ const paymentSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: [
-        "created",
-        "paid",
-        "active",
-        "cancelled",
-        "failed",
-        "expired"
-      ],
+      enum: ["created", "paid", "active", "cancelled", "failed"],
       default: "created",
     },
 
@@ -60,4 +47,5 @@ const paymentSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-export default mongoose.model("Payment", paymentSchema);
+const Payment = mongoose.model("Payment", paymentSchema);
+export default Payment;
