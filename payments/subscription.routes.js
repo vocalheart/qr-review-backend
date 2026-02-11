@@ -7,119 +7,94 @@ import { authMiddleware } from "../middleware/authMiddleware.js";
 const router = express.Router();
 
 /* ======================================================
-    ADMIN – CREATE 3-DAY TRIAL PLAN (ONE TIME)
-   ====================================================== */
+   ADMIN – CREATE PLAN
+====================================================== */
 router.post("/admin/create-plan", authMiddleware, async (req, res) => {
   try {
-    // enable in production
-    // if (req.user.role !== "admin") {
-    //   return res.status(403).json({ success: false, message: "Admin only" });
-    // }
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ success: false, message: "Admin only" });
+    }
+
+    const { name, amount, interval, period } = req.body;
 
     const plan = await razorpay.plans.create({
-      period: "daily",
-      interval: 3, // 3 days
+      period: period || "daily",
+      interval: interval || 3,
       item: {
-        name: "3-Day Trial Subscription",
-        amount: 200, // ₹2 in paise
+        name: name || "3-Day Trial",
+        amount: amount || 200,
         currency: "INR",
-        description: "3-Day Trial Plan - ₹2",
+        description: "Subscription Plan",
       },
     });
 
     res.json({ success: true, plan });
+
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 });
 
 /* ======================================================
-    USER – CREATE SUBSCRIPTION (5-MIN RULE)
-   ====================================================== */
+   ADMIN – GET ALL PLANS
+====================================================== */
+router.get("/admin/get-plans", authMiddleware, async (req, res) => {
+  try {
+    const plans = await razorpay.plans.all({ count: 50 });
+    res.json({ success: true, plans });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/* ======================================================
+   USER – CREATE SUBSCRIPTION (Dynamic Plan)
+====================================================== */
 router.post("/create-subscription", authMiddleware, async (req, res) => {
   try {
-    // Check for active subscription
-    const activeSubscription = await Payment.findOne({
+    const { planId } = req.body;
+
+    if (!planId) {
+      return res.status(400).json({ success: false, message: "Plan ID required" });
+    }
+
+    const active = await Payment.findOne({
       userId: req.user._id,
       type: "subscription",
       status: "active",
     });
 
-    if (activeSubscription) {
+    if (active) {
       return res.status(400).json({
         success: false,
-        message: "You already have an active subscription",
-        subscription: {
-          status: "active",
-          currentEnd: activeSubscription.currentEnd,
-          daysRemaining: Math.ceil(
-            (new Date(activeSubscription.currentEnd) - new Date()) /
-              (1000 * 60 * 60 * 24)
-          ),
-        },
+        message: "Active subscription already exists",
       });
     }
 
-    // Check for pending subscription
-    const existing = await Payment.findOne({
-      userId: req.user._id,
-      type: "subscription",
-      status: "created",
-    });
-
-    if (existing) {
-      const timeDiff = Date.now() - existing.createdAt.getTime();
-
-      // Reuse same payment link (5 min)
-      if (timeDiff < 5 * 60 * 1000) {
-        return res.json({
-          success: true,
-          subscription: {
-            short_url: existing.shortUrl,
-            status: "pending",
-          },
-        });
-      }
-
-      // Expire old subscription
-      if (existing.subscriptionId) {
-        try {
-          await razorpay.subscriptions.cancel(existing.subscriptionId);
-        } catch (err) {
-          console.log("Could not cancel old subscription:", err.message);
-        }
-      }
-
-      await Payment.updateOne({ _id: existing._id }, { status: "failed" });
-    }
-
-    // Create new subscription
     const subscription = await razorpay.subscriptions.create({
-      plan_id: process.env.RAZORPAY_PRO_PLAN_ID,
+      plan_id: planId,
       customer_notify: 1,
-      total_count: 1, // 1 billing cycle only (3 days)
+      total_count: 1,
     });
 
     await Payment.create({
       userId: req.user._id,
       subscriptionId: subscription.id,
-      planId: process.env.RAZORPAY_PRO_PLAN_ID,
+      planId: planId,
       shortUrl: subscription.short_url,
       type: "subscription",
-      status: "created",
-      amount: 200, // ₹2 in paise
-      currency: "INR",
+      amount: subscription.plan.item.amount,
+      currency: subscription.plan.item.currency,
     });
 
     res.json({ success: true, subscription });
+
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 });
 
-/* ======================================================
-    USER – CHECK SUBSCRIPTION STATUS
-   ====================================================== */
+
 router.get("/subscription-status", authMiddleware, async (req, res) => {
   try {
     const sub = await Payment.findOne({
@@ -128,35 +103,14 @@ router.get("/subscription-status", authMiddleware, async (req, res) => {
     }).sort({ createdAt: -1 });
 
     if (!sub) {
-      return res.json({
-        success: true,
-        status: "none",
-        planId: null,
-        message: "No subscription found",
-      });
+      return res.json({ success: true, status: "none" });
     }
 
     let daysRemaining = 0;
-    let hoursRemaining = 0;
 
     if (sub.status === "active" && sub.currentEnd) {
-      const now = new Date();
-      const endDate = new Date(sub.currentEnd);
-      const diffMs = endDate - now;
-
-      if (diffMs > 0) {
-        daysRemaining = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-        hoursRemaining = Math.ceil(diffMs / (1000 * 60 * 60));
-      } else {
-        // Subscription expired
-        await Payment.updateOne({ _id: sub._id }, { status: "cancelled" });
-        return res.json({
-          success: true,
-          status: "expired",
-          planId: sub.planId,
-          message: "Your subscription has expired",
-        });
-      }
+      const diff = sub.currentEnd - new Date();
+      daysRemaining = Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
     }
 
     res.json({
@@ -166,12 +120,12 @@ router.get("/subscription-status", authMiddleware, async (req, res) => {
       currentStart: sub.currentStart,
       currentEnd: sub.currentEnd,
       daysRemaining,
-      hoursRemaining,
-      subscriptionId: sub.subscriptionId,
     });
+
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 });
 
-export default router;
+
+export default router

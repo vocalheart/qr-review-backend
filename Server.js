@@ -116,7 +116,6 @@ async function handleSubscriptionCompleted(subscription) {
 
 async function handleSubscriptionCancelled(subscription) {
   console.log(" Subscription cancelled:", subscription.id);
-
   await Payment.updateOne(
     { subscriptionId: subscription.id },
     {
