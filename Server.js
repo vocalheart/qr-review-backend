@@ -25,22 +25,15 @@ app.post("/api/subscription-webhook",
       const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
 
       const body = req.body.toString();
-
-      const expectedSignature = crypto
-        .createHmac("sha256", webhookSecret)
-        .update(body)
-        .digest("hex");
-
+      const expectedSignature = crypto.createHmac("sha256", webhookSecret).update(body).digest("hex");
       if (razorpaySignature !== expectedSignature) {
         console.log("Signature mismatch");
         console.log("Received :", razorpaySignature);
         console.log("Expected :", expectedSignature);
         return res.status(400).json({ success: false });
       }
-
       const event = JSON.parse(body);
       console.log(" WEBHOOK VERIFIED:", event.event);
-
       const { payload } = event;
 
       // Handle different webhook events

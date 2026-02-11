@@ -11,9 +11,9 @@ const router = express.Router();
 ====================================================== */
 router.post("/admin/create-plan", authMiddleware, async (req, res) => {
   try {
-    if (req.user.role !== "admin") {
-      return res.status(403).json({ success: false, message: "Admin only" });
-    }
+    // if (req.user.role !== "admin") {
+    //   return res.status(403).json({ success: false, message: "Admin only" });
+    // }
 
     const { name, amount, interval, period } = req.body;
 
