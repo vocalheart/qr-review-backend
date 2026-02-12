@@ -5,7 +5,7 @@ import { authMiddleware } from "../middleware/authMiddleware.js";
 import CustomURL from "../models/CustomURL.js";
 import QrImage from "../models/QrImage.js";
 import LogoImage from "../models/LogoImage.js";
-
+import Payment  from '../models/Payment.js'
 
 const router = express.Router();
 
@@ -53,13 +53,14 @@ router.post("/set-url", authMiddleware, async (req, res) => {
   }
 });
 
-// READ / Get URL, Company Name & Logo by qrId
+// READ / Get URL only if subscription active
 router.get("/get-url/:qrId", async (req, res) => {
   const { qrId } = req.params;
 
   try {
-    // 1. Find QR
+    // 1️ Find QR
     const qr = await QrImage.findOne({ randomId: qrId });
+
     if (!qr) {
       return res.status(404).json({
         success: false,
@@ -67,19 +68,49 @@ router.get("/get-url/:qrId", async (req, res) => {
       });
     }
 
-    // 2. Find Custom URL by user
-    const customURL = await CustomURL.findOne({ user: qr.user });
-    if (!customURL) {return res.status(404).json({success: false, message: "No custom URL set for this QR"});
+    // 2️ Check Active Subscription
+    const today = new Date();
+
+    const activeSubscription = await Payment.findOne({
+      userId: qr.user,
+      type: "subscription",
+      status: "active",
+      currentEnd: { $gt: today },
+    });
+
+    if (!activeSubscription) {
+      return res.json({
+        success: true,
+        data: {
+          url: null,
+          companyName: null,
+          redirectFromRating: null,
+          logoUrl: null,
+          message: "Subscription inactive",
+        },
+      });
     }
-    // 3. Find Logo by same user
+
+    // 3️ Find Custom URL
+    const customURL = await CustomURL.findOne({ user: qr.user });
+
+    if (!customURL) {
+      return res.status(404).json({
+        success: false,
+        message: "No custom URL set for this QR",
+      });
+    }
+
+    // 4 Find Logo
     const logo = await LogoImage.findOne({ user: qr.user });
+
     res.json({
       success: true,
       data: {
         url: customURL.url,
         companyName: customURL.companyName,
         redirectFromRating: customURL.redirectFromRating,
-        logoUrl: logo ? logo.logoUrl : null, // or logo.imageUrl
+        logoUrl: logo ? logo.logoUrl : null,
       },
     });
   } catch (err) {

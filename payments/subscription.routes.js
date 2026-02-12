@@ -14,22 +14,26 @@ router.post("/admin/create-plan", authMiddleware, async (req, res) => {
     // if (req.user.role !== "admin") {
     //   return res.status(403).json({ success: false, message: "Admin only" });
     // }
-
     const plan = await razorpay.plans.create({
       period: "daily",
-      interval: 3, // 3 days
+      interval: 7, // 3 days
       item: {
-        name: "3-Day Trial Subscription",
+        name: "7-Day Trial Subscription",
         amount: 200, // ₹2 in paise
         currency: "INR",
-        description: "3-Day Trial Plan - ₹2",
+        description: "7-Day Trial Plan - ₹2",
       },
     });
-
     res.json({ success: true, plan });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
+  console.log("PLAN ERROR FULL:", error);
+  res.status(500).json({
+    success: false,
+    message: error.message,
+    stack: error.stack
+  });
+}
+
 });
 
 
@@ -57,7 +61,6 @@ router.post("/create-subscription", authMiddleware, async (req, res) => {
       type: "subscription",
       status: "active",
     });
-
     if (activeSubscription) {
       return res.status(400).json({
         success: false,
@@ -72,7 +75,6 @@ router.post("/create-subscription", authMiddleware, async (req, res) => {
         },
       });
     }
-
     // Check for pending subscription
     const existing = await Payment.findOne({
       userId: req.user._id,

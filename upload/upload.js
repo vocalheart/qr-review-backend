@@ -17,7 +17,6 @@ const s3 = new S3Client({
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
   },
 });
-
 //Function to generate 10 digit random ID
 const generateRandomId = () => {
   return Math.random().toString().slice(2, 12); // 10 digits
@@ -41,10 +40,8 @@ router.post("/generate-qr", authMiddleware, async (req, res) => {
 
     // Generate 10-digit ID
     const randomId = generateRandomId();
-
     // Create redirect link
     const redirectURL = `https://qr-review-system-fronmtend-7kye.vercel.app/form/${randomId}`;
-
     // Generate QR code with that URL
     const qrBuffer = await QRCode.toBuffer(redirectURL, {
       type: "png",
@@ -63,9 +60,7 @@ router.post("/generate-qr", authMiddleware, async (req, res) => {
         ContentType: "image/png",
       })
     );
-
     const imageUrl = `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileName}`;
-
     // Save in MongoDB
     const qrDoc = await QrImage.create({
       user: userId,
@@ -74,7 +69,6 @@ router.post("/generate-qr", authMiddleware, async (req, res) => {
       randomId: randomId,
       data: redirectURL,
     });
-
     res.status(200).json({
       success: true,
       message: "QR generated successfully",
@@ -112,8 +106,6 @@ router.get("/my-qr", authMiddleware, async (req, res) => {
 // =============================================================
 //  DELETE QR (From S3 + DB)
 // =============================================================
-
-
 router.delete("/delete-qr", authMiddleware, async (req, res) => {
   try {
     const qr = await QrImage.findOne({ user: req.user._id });
