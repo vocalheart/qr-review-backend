@@ -96,8 +96,6 @@ router.post("/signup", async (req, res) => {
     res.status(500).json({ message: "Internal server error" });
   }
 });
-
-
 // --- Login ---
 router.post("/login", async (req, res) => {
   const { email, password } = req.body;
@@ -139,11 +137,15 @@ router.get("/auth/me", verifyToken, async (req, res) => {
 router.post("/logout", (req, res) => {
   res.clearCookie("token", {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+    secure: true,        // always true in production
+    sameSite: "none",    // IMPORTANT for cross-origin
     path: "/",
   });
-  res.status(200).json({ message: "Logout successful" });
+
+  return res.status(200).json({
+    success: true,
+    message: "Logout successful",
+  });
 });
 
 
@@ -192,7 +194,6 @@ router.put("/profile", verifyToken, async (req, res) => {
     if (phone !== undefined) {
       updates.phone = phone.trim() === "" ? null : phone.trim();
     }
-
     const user = await Signup.findByIdAndUpdate(
       req.userId,
       updates,
