@@ -90,7 +90,7 @@ router.post("/signup", async (req, res) => {
     const imageUrl = `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileName}`;
     //Save QR in MongoDB
     await QrImage.create({user: newUser._id, imageUrl, s3Key: fileName,randomId: randomId,data: redirectURL});
-    res.status(201).json({success: true,message: "User registered & QR generated successfully"});
+    res.status(201).json({success: true,message: "User registered  successfully"});
   } catch (error) {
     console.log("Error during signup:", error);
     res.status(500).json({ message: "Internal server error" });
