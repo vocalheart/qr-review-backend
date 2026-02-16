@@ -41,7 +41,7 @@ router.post("/generate-qr", authMiddleware, async (req, res) => {
     // Generate 10-digit ID
     const randomId = generateRandomId();
     // Create redirect link
-    const redirectURL = `https://qr-review-system-fronmtend-7kye.vercel.app/form/${randomId}`;
+    const redirectURL = `https://qr.vocalheart.com/form/${randomId}`;
     // Generate QR code with that URL
     const qrBuffer = await QRCode.toBuffer(redirectURL, {
       type: "png",
@@ -90,7 +90,7 @@ router.get("/my-qr", authMiddleware, async (req, res) => {
     //AUTO GENERATE IF NOT EXISTS
     if (!qr) {
       const randomId = Math.random().toString().slice(2, 12);
-      const redirectURL = `https://qr-review-system-fronmtend-7kye.vercel.app/form/${randomId}`;
+      const redirectURL = `https://qr.vocalheart.com/form/${randomId}`;
       const qrBuffer = await QRCode.toBuffer(redirectURL, {
         type: "png",
         width: 600,
