@@ -6,7 +6,7 @@ import express from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import Signup from "../models/UserScema.js";
-import { sendMail } from "../mailes/transporter.js"; 
+import { sendMail } from "../mailes/transporter.js";
 import QRCode from "qrcode";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import QrImage from "../models/QrImage.js";
@@ -89,13 +89,14 @@ router.post("/signup", async (req, res) => {
     );
     const imageUrl = `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileName}`;
     //Save QR in MongoDB
-    await QrImage.create({user: newUser._id, imageUrl, s3Key: fileName,randomId: randomId,data: redirectURL});
-    res.status(201).json({success: true,message: "User registered  successfully"});
+    await QrImage.create({ user: newUser._id, imageUrl, s3Key: fileName, randomId: randomId, data: redirectURL });
+    res.status(201).json({ success: true, message: "User registered  successfully" });
   } catch (error) {
     console.log("Error during signup:", error);
     res.status(500).json({ message: "Internal server error" });
   }
 });
+
 // --- Login ---
 router.post("/login", async (req, res) => {
   const { email, password } = req.body;
@@ -107,10 +108,13 @@ router.post("/login", async (req, res) => {
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "100y" });
     res.cookie("token", token, {
       httpOnly: true,
-      secure:  true, // secure only in prod
-      sameSite:  "none",
-      maxAge: 100 * 365 * 24 * 60 * 60 * 1000, // ~100 years
+      secure: true,
+      sameSite: "none",
+      domain: ".vocalheart.com", //  MOST IMPORTANT FOR iOS
+      path: "/",
+      maxAge: 100 * 365 * 24 * 60 * 60 * 1000,
     });
+
     res.status(200).json({
       message: "Login successful",
       user: { id: user._id, username: user.username, email: user.email, phone: user.phone },
@@ -147,7 +151,6 @@ router.post("/logout", (req, res) => {
     message: "Logout successful",
   });
 });
-
 
 // --- Get Profile ---
 router.get("/profile", verifyToken, async (req, res) => {
@@ -204,8 +207,11 @@ router.put("/profile", verifyToken, async (req, res) => {
 
     res.json({
       success: true, message: "Profile updated",
-      profile: {username: user.username, 
-      email: user.email,phone: user.phone || "", },});
+      profile: {
+        username: user.username,
+        email: user.email, phone: user.phone || "",
+      },
+    });
   } catch (err) {
     console.error("Update profile error:", err);
     res.status(500).json({ message: "Update failed" });
