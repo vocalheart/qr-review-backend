@@ -16,44 +16,45 @@ const app = express();
 /* ======================================================
    RAZORPAY WEBHOOK (RAW BODY – MANDATORY)
    ====================================================== */
-
-app.post("/api/subscription-webhook",
-  express.raw({ type: "*/*" }),
-  async (req, res) => {
-    try {
+app.post("/api/subscription-webhook", express.raw({ type: "*/*" }), async (req, res) => {
+  try {
       const razorpaySignature = req.headers["x-razorpay-signature"];
       const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
-
       const body = req.body.toString();
-      const expectedSignature = crypto.createHmac("sha256", webhookSecret).update(body).digest("hex");
+      const expectedSignature = crypto
+        .createHmac("sha256", webhookSecret)
+        .update(body)
+        .digest("hex");
+
       if (razorpaySignature !== expectedSignature) {
         console.log("Signature mismatch");
-        console.log("Received :", razorpaySignature);
-        console.log("Expected :", expectedSignature);
         return res.status(400).json({ success: false });
       }
       const event = JSON.parse(body);
-      console.log(" WEBHOOK VERIFIED:", event.event);
+      console.log("WEBHOOK EVENT:", event.event);
       const { payload } = event;
-
-      // Handle different webhook events
       switch (event.event) {
+        //  MOST IMPORTANT (PAYMENT SUCCESS)
+        case "payment.captured":
+          await handlePaymentCaptured(payload.payment.entity);
+          break;
+        case "payment.authorized":
+          console.log("Payment authorized:", payload.payment.entity.id);
+          break;
         case "subscription.activated":
           await handleSubscriptionActivated(payload.subscription.entity);
           break;
-
         case "subscription.charged":
           await handleSubscriptionCharged(payload.payment.entity);
           break;
-
+        // DO NOT CANCEL HERE
         case "subscription.completed":
+          console.log("Subscription cycle completed (NOT cancelling)");
           await handleSubscriptionCompleted(payload.subscription.entity);
           break;
-
         case "subscription.cancelled":
           await handleSubscriptionCancelled(payload.subscription.entity);
           break;
-
         default:
           console.log("Unhandled event:", event.event);
       }
@@ -66,9 +67,29 @@ app.post("/api/subscription-webhook",
   }
 );
 
-// Webhook Handlers
+/* ================= HANDLERS ================= */
+
+async function handlePaymentCaptured(payment) {
+  console.log("Payment Captured:", payment.id);
+  console.log("Subscription ID:", payment.subscription_id);
+
+  if (!payment.subscription_id) {
+    console.log("No subscription_id found in payment");
+    return;
+  }
+
+  await Payment.updateOne(
+    { subscriptionId: payment.subscription_id },
+    {
+      status: "active",
+      paymentId: payment.id,
+    }
+  );
+}
+
+
 async function handleSubscriptionActivated(subscription) {
-  console.log("ubscription activated:", subscription.id);
+  console.log("Subscription Activated:", subscription.id);
 
   const currentStart = new Date(subscription.current_start * 1000);
   const currentEnd = new Date(subscription.current_end * 1000);
@@ -87,28 +108,33 @@ async function handleSubscriptionActivated(subscription) {
 }
 
 async function handleSubscriptionCharged(payment) {
-  console.log("Payment charged:", payment.id);
+  console.log("Subscription Charged:", payment.id);
 
   await Payment.updateOne(
     { subscriptionId: payment.subscription_id },
     {
       paymentId: payment.id,
+      status: "active",
     }
   );
 }
 
+//  FIXED: DO NOT AUTO CANCEL
 async function handleSubscriptionCompleted(subscription) {
-  console.log("Subscription completed:", subscription.id);
+  console.log("Subscription Completed Cycle:", subscription.id);
+
+  // Keep active till expiry (currentEnd logic already in your API)
   await Payment.updateOne(
     { subscriptionId: subscription.id },
     {
-      status: "cancelled",
+      status: "active",
     }
   );
 }
 
 async function handleSubscriptionCancelled(subscription) {
-  console.log(" Subscription cancelled:", subscription.id);
+  console.log("Subscription Cancelled:", subscription.id);
+
   await Payment.updateOne(
     { subscriptionId: subscription.id },
     {
@@ -120,10 +146,8 @@ async function handleSubscriptionCancelled(subscription) {
 // Middlewares
 app.use(express.json());
 app.use(cookieParser());
-
 // DB connection
 connectDB();
-
 // CORS
 app.use(
   cors({
@@ -138,7 +162,6 @@ app.use(
     credentials: true,
   })
 );
-
 // Routes
 app.use("/api", signupAuth);
 app.use("/api", upload);
@@ -146,12 +169,10 @@ app.use("/api", feedbackRoutes);
 app.use("/api/custom-url", customURLRoutes);
 app.use("/api", payment);
 app.use("/api/form", uploadLogo);
-
 // Health check
 app.get("/", async (req, res) => {
   res.status(200).send("Server is running");
-});
-
+})
 // Server
 const PORT = process.env.PORT || 5000;
 

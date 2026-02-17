@@ -10,32 +10,23 @@ const router = express.Router();
    ====================================================== */
 router.post("/admin/create-plan", authMiddleware, async (req, res) => {
   try {
-    // enable in production
-    // if (req.user.role !== "admin") {
-    //   return res.status(403).json({ success: false, message: "Admin only" });
-    // }
     const plan = await razorpay.plans.create({
       period: "daily",
-      interval: 7, // 3 days
+      interval: 7, // 7 days access
       item: {
-        name: "7-Day Trial Subscription",
-        amount: 200, // ₹2 in paise
+        name: "7-Day Premium Subscription", //  NOT trial
+        amount: 200, // ₹2
         currency: "INR",
-        description: "7-Day Trial Plan - ₹2",
+        description: "7-Day Paid Subscription - ₹2",
       },
     });
+
     res.json({ success: true, plan });
   } catch (error) {
-  console.log("PLAN ERROR FULL:", error);
-  res.status(500).json({
-    success: false,
-    message: error.message,
-    stack: error.stack
-  });
-}
-
+    console.log("PLAN ERROR:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
 });
-
 
 /* ======================================================
    ADMIN – GET ALL PLANS
@@ -196,8 +187,7 @@ router.get("/subscription-history", authMiddleware, async (req, res) => {
     const subscriptions = await Payment.find({
       userId: req.user._id,
       type: "subscription",
-    })
-      .sort({ createdAt: -1 }) // Latest first
+    }).sort({ createdAt: -1 })       // Latest first
       .lean();
 
     if (!subscriptions || subscriptions.length === 0) {
@@ -208,7 +198,6 @@ router.get("/subscription-history", authMiddleware, async (req, res) => {
         message: "No subscription history found",
       });
     }
-
     const historyWithRemaining = subscriptions.map((sub) => {
       let daysRemaining = 0;
       let hoursRemaining = 0;
@@ -223,7 +212,6 @@ router.get("/subscription-history", authMiddleware, async (req, res) => {
           hoursRemaining = Math.ceil(diffMs / (1000 * 60 * 60));
         }
       }
-
       return {
         _id: sub._id,
         subscriptionId: sub.subscriptionId,
@@ -253,5 +241,4 @@ router.get("/subscription-history", authMiddleware, async (req, res) => {
     });
   }
 });
-
 export default router;
