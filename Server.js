@@ -14,7 +14,7 @@ import Payment from "./models/Payment.js";
 const app = express();
 
 /* ======================================================
-   RAZORPAY WEBHOOK (RAW BODY – MANDATORY)
+    RAZORPAY WEBHOOK (RAW BODY – MANDATORY)
    ====================================================== */
 app.post("/api/subscription-webhook", express.raw({ type: "*/*" }), async (req, res) => {
   try {
@@ -77,7 +77,6 @@ async function handlePaymentCaptured(payment) {
     console.log("No subscription_id found in payment");
     return;
   }
-
   await Payment.updateOne(
     { subscriptionId: payment.subscription_id },
     {
@@ -86,14 +85,10 @@ async function handlePaymentCaptured(payment) {
     }
   );
 }
-
-
 async function handleSubscriptionActivated(subscription) {
   console.log("Subscription Activated:", subscription.id);
-
   const currentStart = new Date(subscription.current_start * 1000);
   const currentEnd = new Date(subscription.current_end * 1000);
-
   await Payment.updateOne(
     { subscriptionId: subscription.id },
     {
@@ -104,9 +99,8 @@ async function handleSubscriptionActivated(subscription) {
         ? new Date(subscription.charge_at * 1000)
         : null,
     }
-  );
+  );  
 }
-
 async function handleSubscriptionCharged(payment) {
   console.log("Subscription Charged:", payment.id);
 
@@ -175,6 +169,6 @@ app.get("/", async (req, res) => {
 // Server
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on port ${PORT}`);
 });
