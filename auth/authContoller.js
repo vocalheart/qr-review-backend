@@ -13,9 +13,11 @@ import QrImage from "../models/QrImage.js";
 
 const router = express.Router();
 // --- Utility: Generate OTP ---
+
 function generateOtp() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
+
 // --- Middleware: Verify JWT ---
 const verifyToken = (req, res, next) => {
   const token = req.cookies.token;
@@ -192,7 +194,6 @@ router.put("/profile", verifyToken, async (req, res) => {
       }
       updates.email = email;
     }
-
     // FIXED: Allow empty string to clear phone
     if (phone !== undefined) {
       updates.phone = phone.trim() === "" ? null : phone.trim();
@@ -217,8 +218,6 @@ router.put("/profile", verifyToken, async (req, res) => {
     res.status(500).json({ message: "Update failed" });
   }
 });
-
-
 // --- Change Password ---
 router.post("/change-password", verifyToken, async (req, res) => {
   const { oldPassword, newPassword } = req.body;

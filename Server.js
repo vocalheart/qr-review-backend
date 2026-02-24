@@ -10,6 +10,7 @@ import payment from "./payments/subscription.routes.js";
 import uploadLogo from "./customURL/logoUpload.js";
 import crypto from "crypto";
 import Payment from "./models/Payment.js";
+import adminRoutes from "./admin/routes/routes.js"; // ✅ FIXED
 
 const app = express();
 
@@ -162,6 +163,7 @@ app.use("/api", feedbackRoutes);
 app.use("/api/custom-url", customURLRoutes);
 app.use("/api", payment);
 app.use("/api/form", uploadLogo);
+app.use('/api',  adminRoutes);
 // Health check
 app.get("/", async (req, res) => {
   res.status(200).send("Server is running");
@@ -171,5 +173,4 @@ const PORT = process.env.PORT || 6000;
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on port ${PORT}`);
-
 });
