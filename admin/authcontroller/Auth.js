@@ -2,7 +2,6 @@ import express from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import Admin from "../models/Admin.js";
-
 const router = express.Router();
 
 /**
@@ -15,11 +14,10 @@ const isProduction = process.env.NODE_ENV === "production";
 // Frontend: qradminpannel.vocalheart.com
 const cookieOptions = {
   httpOnly: true,
-  secure: isProduction, // true on HTTPS (production)
-  sameSite: isProduction ? "none" : "lax", // 🔥 REQUIRED for cross-domain
+  secure: true,          
+  sameSite: "none",   
   maxAge: 7 * 24 * 60 * 60 * 1000,
   path: "/",
-  domain: isProduction ? ".vocalheart.com" : "localhost", // 🔥 CRITICAL FIX
 };
 
 /**
@@ -96,54 +94,38 @@ router.post("/signup", async (req, res) => {
  * @route   POST /api/admin/login
  * @desc    Admin Login + Secure Cookie (FINAL FIXED)
  */
+// controllers/adminController.js ya routes/admin.js
 router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    if (!email || !password) {
-      return res.status(400).json({
-        success: false,
-        message: "Email and Password are required",
-      });
-    }
-
     const admin = await Admin.findOne({ email });
-    if (!admin) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid Email or Password",
-      });
-    }
+    if (!admin) return res.status(401).json({ success: false, message: "Admin not found" });
 
     const isMatch = await bcrypt.compare(password, admin.password);
-    if (!isMatch) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid Email or Password",
-      });
-    }
+    if (!isMatch) return res.status(401).json({ success: false, message: "Wrong password" });
 
-    const token = generateToken(admin);
+    const token = jwt.sign({ id: admin._id }, process.env.JWT_SECRET, { expiresIn: "7d" });
 
-    //  FINAL COOKIE (WORKS WITH SUBDOMAINS + HTTPS)
-    res.cookie("adminToken", token, cookieOptions);
+    //  Cookie set karo - httpOnly, sameSite ZARURI hai
+    res.cookie("adminToken", token, {
+      httpOnly: true,
+      secure: true,       // localhost pe false, production pe true
+      sameSite: "none",     // localhost ke liye "lax" use karo, "none" sirf HTTPS pe
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    });
 
-    return res.status(200).json({
+    res.json({
       success: true,
-      message: "Login successful",
       admin: {
         id: admin._id,
-        name: admin.name,
         email: admin.email,
-        role: admin.role,
+        name: admin.name,
       },
     });
-  } catch (error) {
-    console.error("Login Error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Server Error",
-    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Server error" });
   }
 });
 

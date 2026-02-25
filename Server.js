@@ -14,6 +14,28 @@ import adminRoutes from "./admin/routes/routes.js"; // ✅ FIXED
 
 const app = express();
 
+// SABSE PEHLE CORS
+app.use(cors({
+  origin: function(origin, callback) {
+    const allowedOrigins = [
+      "http://localhost:3000",
+      "https://admin.infravion.com",
+      "https://infravion.com",
+      "https://qr-review-system-fronmtend-7kye.vercel.app",
+      "https://qr.vocalheart.com",
+      "https://qradminpannel.vocalheart.com"
+    ];
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  credentials: true,
+  allowedHeaders: ["Content-Type", "Authorization", "Cookie"],
+}));
+
 /* ======================================================
     RAZORPAY WEBHOOK (RAW BODY – MANDATORY)
    ====================================================== */
@@ -136,21 +158,7 @@ async function handleSubscriptionCancelled(subscription) {
     }
   );
 }
-// CORS
-app.use(
-  cors({
-    origin: [
-      "http://localhost:3000",
-      "https://admin.infravion.com",
-      "https://infravion.com",
-      "https://qr-review-system-fronmtend-7kye.vercel.app",
-      "https://qr.vocalheart.com",
-      "https://qradminpannel.vocalheart.com"
-    ],
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
-    credentials: true,
-  })
-);
+
 // Middlewares
 app.use(express.json());
 app.use(cookieParser());
