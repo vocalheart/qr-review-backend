@@ -6,16 +6,20 @@ import Admin from "../models/Admin.js";
 const router = express.Router();
 
 /**
- * 🔒 Environment Helpers (PRODUCTION SAFE)
+ *  ENV HELPERS (FINAL PRODUCTION SAFE)
  */
 const isProduction = process.env.NODE_ENV === "production";
 
+//  IMPORTANT: For subdomain cookie sharing
+// API: qrapi.vocalheart.com
+// Frontend: qradminpannel.vocalheart.com
 const cookieOptions = {
   httpOnly: true,
-  secure: isProduction, // 🔥 true in production (HTTPS required)
-  sameSite: isProduction ? "none" : "lax", // 🔥 VERY IMPORTANT
+  secure: isProduction, // true on HTTPS (production)
+  sameSite: isProduction ? "none" : "lax", // 🔥 REQUIRED for cross-domain
   maxAge: 7 * 24 * 60 * 60 * 1000,
-  path: "/", // ensure cookie accessible everywhere
+  path: "/",
+  domain: isProduction ? ".vocalheart.com" : "localhost", // 🔥 CRITICAL FIX
 };
 
 /**
@@ -66,7 +70,7 @@ router.post("/signup", async (req, res) => {
 
     const token = generateToken(admin);
 
-    // 🔥 PRODUCTION SAFE COOKIE
+    //  SET PRODUCTION COOKIE (CROSS DOMAIN SAFE)
     res.cookie("adminToken", token, cookieOptions);
 
     res.status(201).json({
@@ -90,7 +94,7 @@ router.post("/signup", async (req, res) => {
 
 /**
  * @route   POST /api/admin/login
- * @desc    Admin Login + Secure Cookie
+ * @desc    Admin Login + Secure Cookie (FINAL FIXED)
  */
 router.post("/login", async (req, res) => {
   try {
@@ -121,10 +125,10 @@ router.post("/login", async (req, res) => {
 
     const token = generateToken(admin);
 
-    // 🔥 SECURE COOKIE (PRODUCTION READY)
+    //  FINAL COOKIE (WORKS WITH SUBDOMAINS + HTTPS)
     res.cookie("adminToken", token, cookieOptions);
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: "Login successful",
       admin: {
@@ -136,7 +140,7 @@ router.post("/login", async (req, res) => {
     });
   } catch (error) {
     console.error("Login Error:", error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Server Error",
     });
@@ -144,7 +148,7 @@ router.post("/login", async (req, res) => {
 });
 
 /**
- * 🔐 Middleware: Verify Admin (Production Safe)
+ * Middleware: Verify Admin (COOKIE BASED AUTH)
  */
 const verifyAdmin = (req, res, next) => {
   try {
@@ -171,19 +175,19 @@ const verifyAdmin = (req, res, next) => {
 
 /**
  * @route   GET /api/admin/me
- * @desc    Get Logged In Admin
+ * @desc    Get Logged In Admin (Used by AuthContext)
  */
 router.get("/me", verifyAdmin, async (req, res) => {
   try {
     const admin = await Admin.findById(req.admin.id).select("-password");
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       admin,
     });
   } catch (error) {
     console.error("Auth Me Error:", error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Server Error",
     });
@@ -192,7 +196,7 @@ router.get("/me", verifyAdmin, async (req, res) => {
 
 /**
  * @route   POST /api/admin/logout
- * @desc    Logout + Clear Cookie (Production Safe)
+ * @desc    Logout + Clear Cookie (Cross-Domain Safe)
  */
 router.post("/logout", (req, res) => {
   res.clearCookie("adminToken", {
@@ -200,9 +204,10 @@ router.post("/logout", (req, res) => {
     secure: isProduction,
     sameSite: isProduction ? "none" : "lax",
     path: "/",
+    domain: isProduction ? ".vocalheart.com" : "localhost",
   });
 
-  res.status(200).json({
+  return res.status(200).json({
     success: true,
     message: "Logged out successfully",
   });
