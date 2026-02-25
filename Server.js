@@ -136,12 +136,6 @@ async function handleSubscriptionCancelled(subscription) {
     }
   );
 }
-
-// Middlewares
-app.use(express.json());
-app.use(cookieParser());
-// DB connection
-connectDB();
 // CORS
 app.use(
   cors({
@@ -157,6 +151,12 @@ app.use(
     credentials: true,
   })
 );
+// Middlewares
+app.use(express.json());
+app.use(cookieParser());
+// DB connection
+connectDB();
+
 // Routes
 app.use("/api", signupAuth);
 app.use("/api", upload);

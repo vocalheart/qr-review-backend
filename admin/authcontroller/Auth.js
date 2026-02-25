@@ -1,9 +1,22 @@
 import express from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import Admin from "../models/Admin.js"; // ⚠️ extension required in ESM
+import Admin from "../models/Admin.js";
 
 const router = express.Router();
+
+/**
+ * 🔒 Environment Helpers (PRODUCTION SAFE)
+ */
+const isProduction = process.env.NODE_ENV === "production";
+
+const cookieOptions = {
+  httpOnly: true,
+  secure: isProduction, // 🔥 true in production (HTTPS required)
+  sameSite: isProduction ? "none" : "lax", // 🔥 VERY IMPORTANT
+  maxAge: 7 * 24 * 60 * 60 * 1000,
+  path: "/", // ensure cookie accessible everywhere
+};
 
 /**
  * Generate JWT Token
@@ -21,13 +34,12 @@ const generateToken = (admin) => {
 
 /**
  * @route   POST /api/admin/signup
- * @desc    Create Admin / SuperAdmin + Send Cookie Token
+ * @desc    Create Admin + Set Secure Cookie
  */
 router.post("/signup", async (req, res) => {
   try {
     const { name, email, password, role } = req.body;
 
-    // Validate fields
     if (!name || !email || !password) {
       return res.status(400).json({
         success: false,
@@ -35,7 +47,6 @@ router.post("/signup", async (req, res) => {
       });
     }
 
-    // Check existing admin
     const existingAdmin = await Admin.findOne({ email });
     if (existingAdmin) {
       return res.status(400).json({
@@ -44,10 +55,8 @@ router.post("/signup", async (req, res) => {
       });
     }
 
-    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create admin
     const admin = await Admin.create({
       name,
       email,
@@ -55,16 +64,10 @@ router.post("/signup", async (req, res) => {
       role: role || "admin",
     });
 
-    // Generate token
     const token = generateToken(admin);
 
-    // Send token in cookie
-    res.cookie("adminToken", token, {
-      httpOnly: true,
-      secure: false, // production me true + https
-      sameSite: "strict",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    // 🔥 PRODUCTION SAFE COOKIE
+    res.cookie("adminToken", token, cookieOptions);
 
     res.status(201).json({
       success: true,
@@ -87,13 +90,12 @@ router.post("/signup", async (req, res) => {
 
 /**
  * @route   POST /api/admin/login
- * @desc    Admin Login + Cookie Token
+ * @desc    Admin Login + Secure Cookie
  */
 router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Validate
     if (!email || !password) {
       return res.status(400).json({
         success: false,
@@ -101,7 +103,6 @@ router.post("/login", async (req, res) => {
       });
     }
 
-    // Find admin
     const admin = await Admin.findOne({ email });
     if (!admin) {
       return res.status(401).json({
@@ -110,7 +111,6 @@ router.post("/login", async (req, res) => {
       });
     }
 
-    // Compare password
     const isMatch = await bcrypt.compare(password, admin.password);
     if (!isMatch) {
       return res.status(401).json({
@@ -119,16 +119,10 @@ router.post("/login", async (req, res) => {
       });
     }
 
-    // Generate JWT
     const token = generateToken(admin);
 
-    // Send cookie
-    res.cookie("adminToken", token, {
-      httpOnly: true,
-      secure: false,
-      sameSite: "strict",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    // 🔥 SECURE COOKIE (PRODUCTION READY)
+    res.cookie("adminToken", token, cookieOptions);
 
     res.status(200).json({
       success: true,
@@ -150,11 +144,11 @@ router.post("/login", async (req, res) => {
 });
 
 /**
- * Middleware: Verify Admin from Cookie
+ * 🔐 Middleware: Verify Admin (Production Safe)
  */
 const verifyAdmin = (req, res, next) => {
   try {
-    const token = req.cookies.adminToken;
+    const token = req.cookies?.adminToken;
 
     if (!token) {
       return res.status(401).json({
@@ -167,6 +161,7 @@ const verifyAdmin = (req, res, next) => {
     req.admin = decoded;
     next();
   } catch (error) {
+    console.error("Verify Token Error:", error);
     return res.status(401).json({
       success: false,
       message: "Invalid or expired token",
@@ -176,6 +171,7 @@ const verifyAdmin = (req, res, next) => {
 
 /**
  * @route   GET /api/admin/me
+ * @desc    Get Logged In Admin
  */
 router.get("/me", verifyAdmin, async (req, res) => {
   try {
@@ -196,13 +192,14 @@ router.get("/me", verifyAdmin, async (req, res) => {
 
 /**
  * @route   POST /api/admin/logout
+ * @desc    Logout + Clear Cookie (Production Safe)
  */
 router.post("/logout", (req, res) => {
-  res.cookie("adminToken", "", {
+  res.clearCookie("adminToken", {
     httpOnly: true,
-    expires: new Date(0),
-    sameSite: "strict",
-    secure: false,
+    secure: isProduction,
+    sameSite: isProduction ? "none" : "lax",
+    path: "/",
   });
 
   res.status(200).json({
