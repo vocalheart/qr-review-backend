@@ -23,7 +23,8 @@ app.use(cors({
       "https://infravion.com",
       "https://qr-review-system-fronmtend-7kye.vercel.app",
       "https://qr.vocalheart.com",
-      "https://qradminpannel.vocalheart.com"
+      "https://qradminpannel.vocalheart.com",
+      "https://www.reviewbadhao.com"
     ];
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);

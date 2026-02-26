@@ -339,14 +339,12 @@ router.get("/payments/all", superAdminMiddleware, async (req, res) => {
     const safePage = Math.max(1, page);
     const safeLimit = Math.min(50, Math.max(1, limit));
     const skip = (safePage - 1) * safeLimit;
-
     const payments = await Payment.find({})
       .populate("userId", "username email")
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(safeLimit)
       .lean();
-
     const total = await Payment.countDocuments();
 
     res.status(200).json({
@@ -381,9 +379,7 @@ router.get("/payments/orders", superAdminMiddleware, async (req, res) => {
       .skip(skip)
       .limit(safeLimit)
       .lean();
-
     const total = await Payment.countDocuments({ type: "order" });
-
     res.status(200).json({
       success: true,
       payments,
