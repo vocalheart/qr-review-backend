@@ -89,46 +89,74 @@ router.post("/signup", async (req, res) => {
     });
   }
 });
-
-/**
- * @route   POST /api/admin/login
- * @desc    Admin Login + Secure Cookie (FINAL FIXED)
- */
-// controllers/adminController.js ya routes/admin.js
+// POST /api/admin/login
 router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
 
     const admin = await Admin.findOne({ email });
-    if (!admin) return res.status(401).json({ success: false, message: "Admin not found" });
 
+    // 1. Admin exist check
+    if (!admin) {
+      return res.status(401).json({
+        success: false,
+        message: "Admin not found",
+      });
+    }
+
+    // 2. BLOCK / INACTIVE CHECK (MOST IMPORTANT)
+    if (!admin.isActive) {
+      return res.status(403).json({
+        success: false,
+        message: "Your admin account is blocked. Contact Super Admin.",
+      });
+    }
+
+    // 3. Password check
     const isMatch = await bcrypt.compare(password, admin.password);
-    if (!isMatch) return res.status(401).json({ success: false, message: "Wrong password" });
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        message: "Wrong password",
+      });
+    }
 
-    const token = jwt.sign({ id: admin._id }, process.env.JWT_SECRET, { expiresIn: "7d" });
+    // 4. Token generate
+    const token = jwt.sign(
+      {
+        id: admin._id,
+        role: admin.role, // role bhi add karo (RBAC ke liye)
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
 
-    //  Cookie set karo - httpOnly, sameSite ZARURI hai
+    // 5. Cookie set (production vs localhost)
     res.cookie("adminToken", token, {
       httpOnly: true,
-      secure: true,       // localhost pe false, production pe true
-      sameSite: "none",     // localhost ke liye "lax" use karo, "none" sirf HTTPS pe
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      secure: process.env.NODE_ENV === "production", // localhost fix
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    res.json({
+    res.status(200).json({
       success: true,
+      message: "Admin login successful",
       admin: {
         id: admin._id,
         email: admin.email,
         name: admin.name,
+        role: admin.role,
       },
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: "Server error" });
+    console.error("Admin Login Error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
   }
 });
-
 /**
  * Middleware: Verify Admin (COOKIE BASED AUTH)
  */

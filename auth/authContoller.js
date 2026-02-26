@@ -98,35 +98,68 @@ router.post("/signup", async (req, res) => {
     res.status(500).json({ message: "Internal server error" });
   }
 });
-
+// --- Login ---
 // --- Login ---
 router.post("/login", async (req, res) => {
   const { email, password } = req.body;
+
   try {
     const user = await Signup.findOne({ email });
-    if (!user) return res.status(400).json({ message: "User not found" });
+
+    // 1. User exist check
+    if (!user) {
+      return res.status(400).json({ message: "User not found" });
+    }
+
+    // 2. BLOCK CHECK (IMPORTANT)
+    if (user.isBlocked) {
+      return res.status(403).json({
+        message: "Your account has been blocked. Please contact support.",
+      });
+    }
+
+    // 3. Password check
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(400).json({ message: "Invalid credentials" });
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "100y" });
+    if (!isMatch) {
+      return res.status(400).json({ message: "Invalid credentials" });
+    }
+
+    // 4. Update last login (for admin dashboard analytics)
+    user.lastLogin = new Date();
+    await user.save();
+
+    // 5. Token generate
+    const token = jwt.sign(
+      { id: user._id },
+      process.env.JWT_SECRET,
+      { expiresIn: "100y" }
+    );
+
+    // 6. Cookie set
     res.cookie("token", token, {
       httpOnly: true,
       secure: true,
       sameSite: "none",
-      domain: ".vocalheart.com", //  MOST IMPORTANT FOR iOS
+      domain: ".vocalheart.com",
       path: "/",
       maxAge: 100 * 365 * 24 * 60 * 60 * 1000,
     });
 
     res.status(200).json({
       message: "Login successful",
-      user: { id: user._id, username: user.username, email: user.email, phone: user.phone },
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        phone: user.phone,
+      },
     });
+
   } catch (error) {
     console.log("Error during login:", error);
     res.status(500).json({ message: "Internal server error" });
   }
 });
-
 
 // --- Check Authentication ---
 router.get("/auth/me", verifyToken, async (req, res) => {
