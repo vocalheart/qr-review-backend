@@ -72,7 +72,7 @@ router.post("/signup", async (req, res) => {
     await newUser.save();
     // 2️AUTO GENERATE QR AFTER SIGNUP 
     const randomId = generateRandomId();
-    const redirectURL = `https://qr.vocalheart.com/form/${randomId}`;
+    const redirectURL = `https://www.reviewbadhao.com/form/${randomId}`;
     // Generate QR Buffer
     const qrBuffer = await QRCode.toBuffer(redirectURL, {
       type: "png",

@@ -10,7 +10,7 @@ import payment from "./payments/subscription.routes.js";
 import uploadLogo from "./customURL/logoUpload.js";
 import crypto from "crypto";
 import Payment from "./models/Payment.js";
-import adminRoutes from "./admin/routes/routes.js"; // ✅ FIXED
+import adminRoutes from "./admin/routes/routes.js"; //  FIXED
 
 const app = express();
 
@@ -21,10 +21,10 @@ app.use(cors({
       "http://localhost:3000",
       "https://admin.infravion.com",
       "https://infravion.com",
-      "https://qr-review-system-fronmtend-7kye.vercel.app",
       "https://qr.vocalheart.com",
       "https://qradminpannel.vocalheart.com",
-      "https://www.reviewbadhao.com"
+      "https://www.reviewbadhao.com",
+      "https://www.readymealz.in"
     ];
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
@@ -36,7 +36,6 @@ app.use(cors({
   credentials: true,
   allowedHeaders: ["Content-Type", "Authorization", "Cookie"],
 }));
-
 /* ======================================================
     RAZORPAY WEBHOOK (RAW BODY – MANDATORY)
    ====================================================== */
@@ -92,7 +91,6 @@ app.post("/api/subscription-webhook", express.raw({ type: "*/*" }), async (req, 
 );
 
 /* ================= HANDLERS ================= */
-
 async function handlePaymentCaptured(payment) {
   console.log("Payment Captured:", payment.id);
   console.log("Subscription ID:", payment.subscription_id);
