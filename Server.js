@@ -115,6 +115,7 @@ async function handleSubscriptionActivated(subscription) {
     }
   );  
 }
+
 async function handleSubscriptionCharged(payment) {
   console.log("Subscription Charged:", payment.id);
 

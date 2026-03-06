@@ -212,7 +212,7 @@ router.post("/logout", (req, res) => {
     secure: isProduction,
     sameSite: isProduction ? "none" : "lax",
     path: "/",
-    domain: isProduction ? ".vocalheart.com" : "localhost",
+    domain: isProduction ? ".reviewbadhao.com" : "localhost",
   });
 
   return res.status(200).json({

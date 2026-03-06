@@ -140,7 +140,7 @@ router.post("/login", async (req, res) => {
       httpOnly: true,
       secure: true,
       sameSite: "none",
-      domain: ".vocalheart.com",
+      domain: ".reviewbadhao.com",
       path: "/",
       maxAge: 100 * 365 * 24 * 60 * 60 * 1000,
     });
