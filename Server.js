@@ -19,12 +19,9 @@ app.use(cors({
   origin: function(origin, callback) {
     const allowedOrigins = [
       "http://localhost:3000",
-      "https://admin.infravion.com",
-      "https://infravion.com",
       "https://qr.vocalheart.com",
       "https://qradminpannel.vocalheart.com",
       "https://www.reviewbadhao.com",
-      "https://www.readymealz.in"
     ];
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
@@ -44,11 +41,7 @@ app.post("/api/subscription-webhook", express.raw({ type: "*/*" }), async (req, 
       const razorpaySignature = req.headers["x-razorpay-signature"];
       const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
       const body = req.body.toString();
-      const expectedSignature = crypto
-        .createHmac("sha256", webhookSecret)
-        .update(body)
-        .digest("hex");
-
+      const expectedSignature = crypto.createHmac("sha256", webhookSecret).update(body).digest("hex");
       if (razorpaySignature !== expectedSignature) {
         console.log("Signature mismatch");
         return res.status(400).json({ success: false });
@@ -81,7 +74,6 @@ app.post("/api/subscription-webhook", express.raw({ type: "*/*" }), async (req, 
         default:
           console.log("Unhandled event:", event.event);
       }
-
       return res.json({ success: true });
     } catch (err) {
       console.error("Webhook error:", err);
