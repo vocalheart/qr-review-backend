@@ -11,13 +11,13 @@ const router = express.Router();
 router.post("/admin/create-plan", authMiddleware, async (req, res) => {
   try {
     const plan = await razorpay.plans.create({
-      period: "daily",
-      interval: 7, // 7 days access
+      period: "yearly", // yearly subscription
+      interval: 1, // 1 year
       item: {
-        name: "7-Day Premium Subscription", //  NOT trial
-        amount: 200, // ₹2
+        name: "1-Year Premium Subscription",
+        amount: 200000, // ₹2000 in paise
         currency: "INR",
-        description: "7-Day Paid Subscription - ₹2",
+        description: "1-Year Paid Subscription - ₹2000",
       },
     });
 
@@ -106,17 +106,16 @@ router.post("/create-subscription", authMiddleware, async (req, res) => {
       total_count: 1, // 1 billing cycle only (3 days)
     });
 
-    await Payment.create({
-      userId: req.user._id,
-      subscriptionId: subscription.id,
-      planId: process.env.RAZORPAY_PRO_PLAN_ID,
-      shortUrl: subscription.short_url,
-      type: "subscription",
-      status: "created",
-      amount: 200, // ₹2 in paise
-      currency: "INR",
-    });
-
+  await Payment.create({
+        userId: req.user._id,
+        subscriptionId: subscription.id,
+        planId: process.env.RAZORPAY_PRO_PLAN_ID,
+        shortUrl: subscription.short_url,
+        type: "subscription",
+        status: "created",
+        amount: 200000, // ₹2000
+        currency: "INR",
+});
     res.json({ success: true, subscription });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
