@@ -207,18 +207,27 @@ router.get("/me", verifyAdmin, async (req, res) => {
  * @desc    Logout + Clear Cookie (Cross-Domain Safe)
  */
 router.post("/logout", (req, res) => {
-  res.clearCookie("adminToken", {
-    httpOnly: true,
-    secure: isProduction,
-    sameSite: isProduction ? "none" : "lax",
-    path: "/",
-    domain: isProduction ? ".reviewbadhao.com" : "localhost",
-  });
+  try {
 
-  return res.status(200).json({
-    success: true,
-    message: "Logged out successfully",
-  });
+    res.clearCookie("adminToken", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      path: "/"
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Logged out successfully"
+    });
+
+  } catch (error) {
+    console.error("Logout Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Logout failed"
+    });
+  }
 });
-
 export default router;
