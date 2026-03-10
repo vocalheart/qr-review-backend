@@ -176,8 +176,9 @@ router.get("/auth/me", verifyToken, async (req, res) => {
 router.post("/logout", (req, res) => {
   res.clearCookie("token", {
     httpOnly: true,
-    secure: true,        // always true in production
-    sameSite: "none",    // IMPORTANT for cross-origin
+    secure: true,
+    sameSite: "none",
+    domain: ".reviewbadhao.com",
     path: "/",
   });
 
