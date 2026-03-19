@@ -22,6 +22,7 @@ app.use(cors({
       "https://qr.vocalheart.com",
       "https://qradminpannel.vocalheart.com",
       "https://www.reviewbadhao.com",
+      "https://admin.reviewbadhao.com"
     ];
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
