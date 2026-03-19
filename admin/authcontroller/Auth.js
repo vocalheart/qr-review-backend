@@ -133,8 +133,10 @@ router.post("/login", async (req, res) => {
     // 5. Cookie set (production vs localhost)
     res.cookie("adminToken", token, {
       httpOnly: true,
-      secure: true,        // production me always true
-      sameSite: "none",    // cross-domain ke liye required
+      secure: true,
+      sameSite: "none",
+      domain: ".reviewbadhao.com", // ADD THIS
+      path: "/",                   //  optional but safe
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
     res.status(200).json({
