@@ -14,8 +14,8 @@ const isProduction = process.env.NODE_ENV === "production";
 // Frontend: qradminpannel.vocalheart.com
 const cookieOptions = {
   httpOnly: true,
-  secure: true,          
-  sameSite: "none",   
+  secure: true,
+  sameSite: "none",
   maxAge: 7 * 24 * 60 * 60 * 1000,
   path: "/",
 };
@@ -133,8 +133,8 @@ router.post("/login", async (req, res) => {
     // 5. Cookie set (production vs localhost)
     res.cookie("adminToken", token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production", // localhost fix
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      secure: true,        // production me always true
+      sameSite: "none",    // cross-domain ke liye required
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
     res.status(200).json({

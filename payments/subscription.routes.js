@@ -5,10 +5,13 @@ import Payment from "../models/Payment.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
+
+console.log(process.env.RAZORPAY_KEY_ID);
+console.log(process.env.RAZORPAY_KEY_SECRET);
 /* ======================================================
     ADMIN – CREATE 3-DAY TRIAL PLAN (ONE TIME)
    ====================================================== */
-router.post("/admin/create-plan", authMiddleware, async (req, res) => {
+router.post("/admin/create-plan",  async (req, res) => {
   try {
     const plan = await razorpay.plans.create({
       period: "yearly",

@@ -14,7 +14,7 @@ import QrImage from "../models/QrImage.js";
 const router = express.Router();
 // --- Utility: Generate OTP ---
 
-function generateOtp() {
+function generateOtp() { 
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
@@ -105,12 +105,10 @@ router.post("/login", async (req, res) => {
 
   try {
     const user = await Signup.findOne({ email });
-
     // 1. User exist check
     if (!user) {
       return res.status(400).json({ message: "User not found" });
     }
-
     // 2. BLOCK CHECK (IMPORTANT)
     if (user.isBlocked) {
       return res.status(403).json({
@@ -140,7 +138,7 @@ router.post("/login", async (req, res) => {
       httpOnly: true,
       secure: true,
       sameSite: "none",
-      domain: ".reviewbadhao.com",
+      // domain: ".reviewbadhao.com",
       path: "/",
       maxAge: 100 * 365 * 24 * 60 * 60 * 1000,
     });
@@ -178,22 +176,20 @@ router.post("/logout", (req, res) => {
     httpOnly: true,
     secure: true,
     sameSite: "none",
-    domain: ".reviewbadhao.com",
+    // domain: ".reviewbadhao.com",
     path: "/",
   });
 
   return res.status(200).json({
     success: true,
     message: "Logout successful",
-  });
+  });  
 });
-
 // --- Get Profile ---
 router.get("/profile", verifyToken, async (req, res) => {
   try {
     const user = await Signup.findById(req.userId).select("-password");
     if (!user) return res.status(404).json({ message: "User not found" });
-
     res.json({
       success: true,
       profile: {
@@ -211,15 +207,12 @@ router.get("/profile", verifyToken, async (req, res) => {
 // --- Update Profile ---
 router.put("/profile", verifyToken, async (req, res) => {
   const { username, email, phone } = req.body;
-
   // Allow empty string for phone (to clear it)
   if (!username && !email && phone === undefined) {
     return res.status(400).json({ message: "Nothing to update" });
   }
-
   try {
     const updates = {};
-
     if (username) updates.username = username;
     if (email) {
       const existing = await Signup.findOne({ email });
@@ -252,6 +245,7 @@ router.put("/profile", verifyToken, async (req, res) => {
     res.status(500).json({ message: "Update failed" });
   }
 });
+
 // --- Change Password ---
 router.post("/change-password", verifyToken, async (req, res) => {
   const { oldPassword, newPassword } = req.body;
@@ -310,11 +304,8 @@ router.post("/forgot-password", async (req, res) => {
 
     const otp = generateOtp();
     console.log("OTP for", email, ":", otp);
-
     const otpToken = jwt.sign({ id: user._id, otp }, process.env.JWT_SECRET, { expiresIn: "5m" });
-
     await sendMail(email, "Password Reset OTP", `Your OTP is: <b>${otp}</b>. Valid for 5 minutes.`);
-
     res.cookie("otpToken", otpToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
