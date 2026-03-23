@@ -6,25 +6,47 @@ import { authMiddleware } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-console.log(process.env.RAZORPAY_KEY_ID);
-console.log(process.env.RAZORPAY_KEY_SECRET);
 /* ======================================================
-    ADMIN – CREATE 3-DAY TRIAL PLAN (ONE TIME)
-   ====================================================== */
-router.post("/admin/create-plan",  async (req, res) => {
+   ADMIN – CREATE ALL PLANS (Monthly / 3 Months / Yearly)
+====================================================== */
+
+router.post("/admin/create-plan", async (req, res) => {
   try {
-    const plan = await razorpay.plans.create({
-      period: "yearly",
+    const monthly = await razorpay.plans.create({
+      period: "monthly",
       interval: 1,
       item: {
-        name: "1-Year Premium Subscription",
-        amount: 249900, // ₹2499 in paise
+        name: "Monthly Plan",
+        amount: 64900, // ₹649
         currency: "INR",
-        description: "1-Year Paid Subscription - ₹2499",
       },
     });
 
-    res.json({ success: true, plan });
+    const quarterly = await razorpay.plans.create({
+      period: "monthly",
+      interval: 3,
+      item: {
+        name: "3 Months Plan",
+        amount: 144900, // ₹1449
+        currency: "INR",
+      },
+    });
+
+    const yearly = await razorpay.plans.create({
+      period: "yearly",
+      interval: 1,
+      item: {
+        name: "Yearly Plan",
+        amount: 249900, // ₹2499
+        currency: "INR",
+      },
+    });
+
+    res.json({
+      success: true,
+      plans: { monthly, quarterly, yearly },
+    });
+
   } catch (error) {
     console.log("PLAN ERROR:", error);
     res.status(500).json({ success: false, message: error.message });
@@ -34,6 +56,7 @@ router.post("/admin/create-plan",  async (req, res) => {
 /* ======================================================
    ADMIN – GET ALL PLANS
 ====================================================== */
+
 router.get("/admin/get-plans", authMiddleware, async (req, res) => {
   try {
     const plans = await razorpay.plans.all({ count: 50 });
@@ -43,33 +66,48 @@ router.get("/admin/get-plans", authMiddleware, async (req, res) => {
   }
 });
 
-
 /* ======================================================
-    USER – CREATE SUBSCRIPTION (5-MIN RULE)
-   ====================================================== */
+   USER – CREATE SUBSCRIPTION (MULTI PLAN + 5 MIN RULE)
+====================================================== */
+
 router.post("/create-subscription", authMiddleware, async (req, res) => {
   try {
-    // Check for active subscription
+    const { planType } = req.body; // monthly / quarterly / yearly
+
+    let planId;
+    let amount;
+
+    if (planType === "monthly") {
+      planId = process.env.RAZORPAY_MONTHLY_PLAN_ID;
+      amount = 64900;
+    } else if (planType === "quarterly") {
+      planId = process.env.RAZORPAY_3MONTH_PLAN_ID;
+      amount = 144900;
+    } else if (planType === "yearly") {
+      planId = process.env.RAZORPAY_YEARLY_PLAN_ID;
+      amount = 249900;
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid plan type",
+      });
+    }
+
+    // Active subscription check
     const activeSubscription = await Payment.findOne({
       userId: req.user._id,
       type: "subscription",
       status: "active",
     });
+
     if (activeSubscription) {
       return res.status(400).json({
         success: false,
         message: "You already have an active subscription",
-        subscription: {
-          status: "active",
-          currentEnd: activeSubscription.currentEnd,
-          daysRemaining: Math.ceil(
-            (new Date(activeSubscription.currentEnd) - new Date()) /
-              (1000 * 60 * 60 * 24)
-          ),
-        },
       });
     }
-    // Check for pending subscription
+
+    // Pending check
     const existing = await Payment.findOne({
       userId: req.user._id,
       type: "subscription",
@@ -79,7 +117,7 @@ router.post("/create-subscription", authMiddleware, async (req, res) => {
     if (existing) {
       const timeDiff = Date.now() - existing.createdAt.getTime();
 
-      // Reuse same payment link (5 min)
+      // reuse link within 5 mins
       if (timeDiff < 5 * 60 * 1000) {
         return res.json({
           success: true,
@@ -90,12 +128,12 @@ router.post("/create-subscription", authMiddleware, async (req, res) => {
         });
       }
 
-      // Expire old subscription
+      // cancel old
       if (existing.subscriptionId) {
         try {
           await razorpay.subscriptions.cancel(existing.subscriptionId);
         } catch (err) {
-          console.log("Could not cancel old subscription:", err.message);
+          console.log("Cancel error:", err.message);
         }
       }
 
@@ -104,30 +142,50 @@ router.post("/create-subscription", authMiddleware, async (req, res) => {
 
     // Create new subscription
     const subscription = await razorpay.subscriptions.create({
-      plan_id: process.env.RAZORPAY_PRO_PLAN_ID,
+      plan_id: planId,
       customer_notify: 1,
-      total_count: 1, // 1 billing cycle only (3 days)
+      total_count: 1,
     });
 
-await Payment.create({
-  userId: req.user._id,
-  subscriptionId: subscription.id,
-  planId: process.env.RAZORPAY_PRO_PLAN_ID,
-  shortUrl: subscription.short_url,
-  type: "subscription",
-  status: "created",
-  amount: 249900, // ₹2499
-  currency: "INR",
-});
+    await Payment.create({
+      userId: req.user._id,
+      subscriptionId: subscription.id,
+      planId: planId,
+      planType: planType, // ← save planType so we can show label later
+      shortUrl: subscription.short_url,
+      type: "subscription",
+      status: "created",
+      amount,
+      currency: "INR",
+    });
+
     res.json({ success: true, subscription });
+
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 });
 
 /* ======================================================
-    USER – CHECK SUBSCRIPTION STATUS
-   ====================================================== */
+   WEBHOOK – RAZORPAY (update currentStart / currentEnd)
+   Make sure this is already wired up in your app.
+   Just confirming the Payment.updateOne sets both fields.
+====================================================== */
+
+// Example inside your existing webhook handler — update this block:
+// await Payment.updateOne(
+//   { subscriptionId: subscriptionId },
+//   {
+//     status: "active",
+//     currentStart: new Date(payload.subscription.entity.current_start * 1000),
+//     currentEnd:   new Date(payload.subscription.entity.current_end   * 1000),
+//   }
+// );
+
+/* ======================================================
+   USER – CHECK SUBSCRIPTION STATUS  ← FIXED
+====================================================== */
+
 router.get("/subscription-status", authMiddleware, async (req, res) => {
   try {
     const sub = await Payment.findOne({
@@ -136,111 +194,62 @@ router.get("/subscription-status", authMiddleware, async (req, res) => {
     }).sort({ createdAt: -1 });
 
     if (!sub) {
-      return res.json({
-        success: true,
-        status: "none",
-        planId: null,
-        message: "No subscription found",
-      });
+      return res.json({ success: true, status: "none" });
     }
+
     let daysRemaining = 0;
     let hoursRemaining = 0;
 
     if (sub.status === "active" && sub.currentEnd) {
-      const now = new Date();
-      const endDate = new Date(sub.currentEnd);
-      const diffMs = endDate - now;
-
-      if (diffMs > 0) {
-        daysRemaining = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-        hoursRemaining = Math.ceil(diffMs / (1000 * 60 * 60));
-      } else {
-        // Subscription expired
-        await Payment.updateOne({ _id: sub._id }, { status: "cancelled" });
-        return res.json({
-          success: true,
-          status: "expired",
-          planId: sub.planId,
-          message: "Your subscription has expired",
-        });
+      const diff = new Date(sub.currentEnd) - new Date();
+      if (diff > 0) {
+        daysRemaining  = Math.floor(diff / (1000 * 60 * 60 * 24));
+        hoursRemaining = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
       }
     }
 
+    // Map planId → human label + price  (env vars must match)
+    const planMap = {
+      [process.env.RAZORPAY_MONTHLY_PLAN_ID]:  { label: "Monthly Plan",   price: "₹649"  },
+      [process.env.RAZORPAY_3MONTH_PLAN_ID]:   { label: "3 Months Plan",  price: "₹1449" },
+      [process.env.RAZORPAY_YEARLY_PLAN_ID]:   { label: "1 Year Plan",    price: "₹2499" },
+    };
+
+    const planInfo = planMap[sub.planId] || { label: "Premium Plan", price: "" };
+
     res.json({
       success: true,
-      status: sub.status,
-      planId: sub.planId,
-      currentStart: sub.currentStart,
-      currentEnd: sub.currentEnd,
+      status:        sub.status,
+      planId:        sub.planId,
+      planType:      sub.planType || null,
+      planLabel:     planInfo.label,   // ← NEW: "Monthly Plan" / "3 Months Plan" / "1 Year Plan"
+      planPrice:     planInfo.price,   // ← NEW: "₹649" / "₹1449" / "₹2499"
       daysRemaining,
-      hoursRemaining,
-      subscriptionId: sub.subscriptionId,
+      hoursRemaining,                  // ← NEW: hours part
+      currentStart:  sub.currentStart || null,  // ← was missing before
+      currentEnd:    sub.currentEnd   || null,  // ← was missing before
     });
+
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({ success: false });
   }
 });
 
 /* ======================================================
-    USER – GET ALL SUBSCRIPTION HISTORY
-   ====================================================== */
+   USER – SUBSCRIPTION HISTORY
+====================================================== */
+
 router.get("/subscription-history", authMiddleware, async (req, res) => {
   try {
-    const subscriptions = await Payment.find({
+    const history = await Payment.find({
       userId: req.user._id,
       type: "subscription",
-    }).sort({ createdAt: -1 })       // Latest first
-      .lean();
+    }).sort({ createdAt: -1 });
 
-    if (!subscriptions || subscriptions.length === 0) {
-      return res.json({
-        success: true,
-        count: 0,
-        history: [],
-        message: "No subscription history found",
-      });
-    }
-    const historyWithRemaining = subscriptions.map((sub) => {
-      let daysRemaining = 0;
-      let hoursRemaining = 0;
-
-      if (sub.status === "active" && sub.currentEnd) {
-        const now = new Date();
-        const endDate = new Date(sub.currentEnd);
-        const diffMs = endDate - now;
-
-        if (diffMs > 0) {
-          daysRemaining = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-          hoursRemaining = Math.ceil(diffMs / (1000 * 60 * 60));
-        }
-      }
-      return {
-        _id: sub._id,
-        subscriptionId: sub.subscriptionId,
-        planId: sub.planId,
-        amount: sub.amount,
-        currency: sub.currency,
-        status: sub.status,
-        shortUrl: sub.shortUrl,
-        currentStart: sub.currentStart,
-        currentEnd: sub.currentEnd,
-        daysRemaining,
-        hoursRemaining,
-        createdAt: sub.createdAt,
-      };
-    });
-
-    res.json({
-      success: true,
-      count: historyWithRemaining.length,
-      history: historyWithRemaining,
-    });
+    res.json({ success: true, history });
   } catch (error) {
-    console.error("SUBSCRIPTION HISTORY ERROR:", error);
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false });
   }
 });
+
 export default router;

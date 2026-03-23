@@ -16,6 +16,10 @@ const paymentSchema = new mongoose.Schema(
     // ===== SUBSCRIPTION =====
     subscriptionId: String,
     planId: String,
+    planType: {
+      type: String,
+      enum: ["monthly", "quarterly", "yearly"],
+    },
     shortUrl: String,
 
     amount: {
@@ -46,5 +50,6 @@ const paymentSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
 const Payment = mongoose.model("Payment", paymentSchema);
 export default Payment;
