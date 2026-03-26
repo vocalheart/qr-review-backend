@@ -18,7 +18,6 @@ router.post("/save-feedback", async (req, res) => {
         message: "qrId is required",
       });
     }
-
     // Find QR and get owner
     const qrDoc = await QrImage.findOne({ randomId: qrId });
     if (!qrDoc) {
@@ -27,10 +26,8 @@ router.post("/save-feedback", async (req, res) => {
         message: "Invalid QR Code",
       });
     }
-
     // Clean phone: store null if empty
     const cleanPhone = phone.trim() === "" ? null : phone.trim();
-
     // Save feedback
     const fb = await Feedback.create({
       qrId,

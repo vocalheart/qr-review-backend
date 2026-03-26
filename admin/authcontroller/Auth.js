@@ -135,7 +135,7 @@ router.post("/login", async (req, res) => {
       httpOnly: true,
       secure: true,
       sameSite: "none",
-      domain: ".reviewbadhao.com", // ADD THIS
+      // domain: ".reviewbadhao.com", // ADD THIS
       path: "/",                   //  optional but safe
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });

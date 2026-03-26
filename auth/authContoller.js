@@ -10,13 +10,14 @@ import { sendMail } from "../mailes/transporter.js";
 import QRCode from "qrcode";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import QrImage from "../models/QrImage.js";
-
 const router = express.Router();
+
 // --- Utility: Generate OTP ---
 
 function generateOtp() { 
   return Math.floor(100000 + Math.random() * 900000).toString();
-}
+};
+
 
 // --- Middleware: Verify JWT ---
 const verifyToken = (req, res, next) => {
@@ -30,7 +31,6 @@ const verifyToken = (req, res, next) => {
     res.status(401).json({ message: "Invalid or expired token" });
   }
 };
-
 
 // S3 client (same as QR route)
 const s3 = new S3Client({
@@ -60,7 +60,6 @@ router.post("/signup", async (req, res) => {
     if (existUser) {
       return res.status(400).json({ message: "User already exists" });
     }
-
     // 1️ Create User
     const hashedPassword = await bcrypt.hash(password, 10);
     const newUser = new Signup({
@@ -98,6 +97,7 @@ router.post("/signup", async (req, res) => {
     res.status(500).json({ message: "Internal server error" });
   }
 });
+
 // --- Login ---
 // --- Login ---
 router.post("/login", async (req, res) => {
@@ -159,6 +159,7 @@ router.post("/login", async (req, res) => {
   }
 });
 
+
 // --- Check Authentication ---
 router.get("/auth/me", verifyToken, async (req, res) => {
   try {
@@ -169,6 +170,8 @@ router.get("/auth/me", verifyToken, async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
+
+
 
 // --------- Logout ----------- //
 router.post("/logout", (req, res) => {
@@ -185,6 +188,9 @@ router.post("/logout", (req, res) => {
     message: "Logout successful",
   });  
 });
+
+
+
 // --- Get Profile ---
 router.get("/profile", verifyToken, async (req, res) => {
   try {
@@ -203,6 +209,8 @@ router.get("/profile", verifyToken, async (req, res) => {
     res.status(500).json({ message: "Failed to fetch profile" });
   }
 });
+
+
 
 // --- Update Profile ---
 router.put("/profile", verifyToken, async (req, res) => {
@@ -246,6 +254,9 @@ router.put("/profile", verifyToken, async (req, res) => {
   }
 });
 
+
+
+
 // --- Change Password ---
 router.post("/change-password", verifyToken, async (req, res) => {
   const { oldPassword, newPassword } = req.body;
@@ -274,15 +285,16 @@ router.post("/change-password", verifyToken, async (req, res) => {
   }
 });
 
+
+
+
 // --- Delete Account ---
 router.delete("/profile", verifyToken, async (req, res) => {
   try {
     const user = await Signup.findById(req.userId);
     if (!user) return res.status(404).json({ message: "User not found" });
-
     // Optional: Add confirmation via email or password
     await Signup.findByIdAndDelete(req.userId);
-
     res.clearCookie("token", {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
@@ -294,6 +306,8 @@ router.delete("/profile", verifyToken, async (req, res) => {
     res.status(500).json({ message: "Deletion failed" });
   }
 });
+
+
 
 // --- Forgot Password (Send OTP) ---
 router.post("/forgot-password", async (req, res) => {
