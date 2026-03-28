@@ -11,6 +11,7 @@ const connectDB = async () => {
             useNewUrlParser: true,
             useUnifiedTopology: true,
             serverSelectionTimeoutMS: 10000, // wait max 10s for server
+             tlsAllowInvalidCertificates: true, // 👈 add this
         });
         console.log(' Connected to MongoDB');
     } catch (err) {

@@ -6,7 +6,7 @@ import CustomURL from "../models/CustomURL.js";
 import QrImage from "../models/QrImage.js";
 import LogoImage from "../models/LogoImage.js";
 import Payment  from '../models/Payment.js';
-import Qr from '../admin//AdminQr/models/qrSchema.js';
+import Qr from '../admin/AdminQr/models/qrSchema.js';
 
 const router = express.Router();
 // READ / Get URL only if subscription active
@@ -14,7 +14,6 @@ router.get("/get-url/:qrId", async (req, res) => {
   const { qrId } = req.params;
 
   try {
-
     //0
     const adminQr = await Qr.findOne({ randomId: qrId });
     if (adminQr) {
@@ -231,7 +230,6 @@ router.put("/update-url", authMiddleware, async (req, res) => {
       message: "redirectFromRating must be between 1 to 5",
     });
   }
-
   try {
     const customURL = await CustomURL.findOne({ user: req.user._id });
     if (!customURL) {
@@ -254,6 +252,7 @@ router.put("/update-url", authMiddleware, async (req, res) => {
       message: "Custom URL, Company Name & Redirect setting updated",
       data: customURL,
     });
+    
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: err.message });

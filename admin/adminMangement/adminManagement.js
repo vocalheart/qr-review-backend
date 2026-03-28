@@ -15,7 +15,7 @@ const router = express.Router();
  * @route   POST /api/admin/create
  * @desc    SuperAdmin - Create new Admin or SuperAdmin
  * @access  Private (SuperAdmin only)
- */
+ **/
 router.post("/create", superAdminMiddleware, async (req, res) => {
   try {
     const { name, email, password, role } = req.body;

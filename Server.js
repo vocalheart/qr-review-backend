@@ -20,6 +20,7 @@ app.use(cors({
   origin: function(origin, callback) {
     const allowedOrigins = [
       "http://localhost:3000",
+      "http://localhost:3001",
       "https://qr.vocalheart.com",
       "https://qradminpannel.vocalheart.com",
       "https://www.reviewbadhao.com",
@@ -233,7 +234,7 @@ async function handleSubscriptionCancelled(subscription) {
 
   await Payment.updateOne(
     { subscriptionId: subscription.id },
-    { status: "cancelled" }
+    { status: "cancelled"}
   );
 }
 
@@ -269,7 +270,7 @@ app.get("/", async (req, res) => {
 /* ======================================================
    START
    ====================================================== */
-const PORT = process.env.PORT || 6000;
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on port ${PORT}`);
 });
