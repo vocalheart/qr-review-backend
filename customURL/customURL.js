@@ -9,83 +9,88 @@ import Payment  from '../models/Payment.js';
 import Qr from '../admin/AdminQr/models/qrSchema.js';
 
 const router = express.Router();
-// READ / Get URL only if subscription active
+
+
 router.get("/get-url/:qrId", async (req, res) => {
   const { qrId } = req.params;
-
   try {
-    //0
-    const adminQr = await Qr.findOne({ randomId: qrId });
-    if (adminQr) {
-      if (!adminQr.isActive) {
+    // 1️ First check: User assigned QR (QrImage)
+    const qr = await QrImage.findOne({ randomId: qrId });
+
+    if (qr) {
+      //  Check subscription
+      const today = new Date();
+
+      const activeSubscription = await Payment.findOne({
+        userId: qr.user,
+        type: "subscription",
+        status: "active",
+        currentEnd: { $gt: today },
+      });
+
+      if (!activeSubscription) {
         return res.json({
-          success: false,
-          message: "Please activate your ID, contact customer support",
+          success: true,
+          data: {
+            url: null,
+            companyName: null,
+            redirectFromRating: null,
+            logoUrl: null,
+            message: "Subscription inactive",
+          },
         });
       }
+
+      //  Get Custom URL
+      const customURL = await CustomURL.findOne({ user: qr.user });
+
+      if (!customURL) {
+        return res.status(404).json({
+          success: false,
+          message: "No custom URL set for this QR",
+        });
+      }
+      //  Get Logo
+      const logo = await LogoImage.findOne({ user: qr.user });
+
       return res.json({
         success: true,
         data: {
-          url: adminQr.qrUrl,
-          imageUrl: adminQr.imageUrl || null,
+          url: customURL.url,
+          companyName: customURL.companyName,
+          redirectFromRating: customURL.redirectFromRating,
+          logoUrl: logo ? logo.logoUrl : null,
         },
       });
     }
-    // 1️ Find QR
-    const qr = await QrImage.findOne({ randomId: qrId });
 
-    if (!qr) {
+    // 2️ Fallback: Admin QR (default QR)
+    const adminQr = await Qr.findOne({ randomId: qrId });
+
+    if (!adminQr) {
       return res.status(404).json({
         success: false,
         message: "QR not found",
       });
     }
 
-    // 2️ Check Active Subscription
-    const today = new Date();
-
-    const activeSubscription = await Payment.findOne({
-      userId: qr.user,
-      type: "subscription",
-      status: "active",
-      currentEnd: { $gt: today },
-    });
-
-    if (!activeSubscription) {
+    //  If not active
+    if (!adminQr.isActive) {
       return res.json({
-        success: true,
-        data: {
-          url: null,
-          companyName: null,
-          redirectFromRating: null,
-          logoUrl: null,
-          message: "Subscription inactive",
-        },
-      });
-    }
-
-    // 3️ Find Custom URL
-    const customURL = await CustomURL.findOne({ user: qr.user });
-
-    if (!customURL) {
-      return res.status(404).json({
         success: false,
-        message: "No custom URL set for this QR",
+        message: "Please activate your ID, contact customer support",
       });
     }
 
-    // 4 Find Logo
-    const logo = await LogoImage.findOne({ user: qr.user });
-
-    res.json({
+    //  Default QR response
+    return res.json({
       success: true,
       data: {
-        url: customURL.url,
-        companyName: customURL.companyName,
-        redirectFromRating: customURL.redirectFromRating,
-        logoUrl: logo ? logo.logoUrl : null,
+        url: adminQr.qrUrl,
+        imageUrl: adminQr.imageUrl || null,
       },
     });
+
   } catch (err) {
     console.error("Error fetching custom URL:", err);
     res.status(500).json({
