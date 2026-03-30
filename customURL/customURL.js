@@ -9,57 +9,28 @@ import Payment  from '../models/Payment.js';
 import Qr from '../admin/AdminQr/models/qrSchema.js';
 
 const router = express.Router();
-
-
-// CREATE / SET OR UPDATE custom URL + company name + redirect setting
-router.post("/set-url", authMiddleware, async (req, res) => {
-  const { url, companyName, redirectFromRating } = req.body;
-  if (!url)
-    return res.status(400).json({ success: false, message: "URL is required" });
-  if (!companyName)
-    return res.status(400).json({ success: false, message: "Company name is required" });
-  if (
-    redirectFromRating !== undefined &&
-    (redirectFromRating < 1 || redirectFromRating > 5)
-  ) {
-    return res.status(400).json({
-      success: false,
-      message: "redirectFromRating must be between 1 to 5",
-    });
-  }
-  try {
-    let existing = await CustomURL.findOne({ user: req.user._id });
-    if (existing) {
-      existing.url = url;
-      existing.companyName = companyName;
-      if (redirectFromRating !== undefined) {
-        existing.redirectFromRating = redirectFromRating;
-      }
-      await existing.save();
-    } else {
-      existing = await CustomURL.create({
-        user: req.user._id,
-        url,
-        companyName,
-        redirectFromRating: redirectFromRating ?? 3,
-      });
-    }
-
-    res.json({
-      success: true,
-      message: "Custom URL & redirect setting saved successfully",
-      data: existing,
-    });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
-
 // READ / Get URL only if subscription active
 router.get("/get-url/:qrId", async (req, res) => {
   const { qrId } = req.params;
 
   try {
+    //0
+    const adminQr = await Qr.findOne({ randomId: qrId });
+    if (adminQr) {
+      if (!adminQr.isActive) {
+        return res.json({
+          success: false,
+          message: "Please activate your ID, contact customer support",
+        });
+      }
+      return res.json({
+        success: true,
+        data: {
+          url: adminQr.qrUrl,
+          imageUrl: adminQr.imageUrl || null,
+        },
+      });
+    }
     // 1️ Find QR
     const qr = await QrImage.findOne({ randomId: qrId });
 
@@ -121,6 +92,51 @@ router.get("/get-url/:qrId", async (req, res) => {
       success: false,
       message: err.message,
     });
+  }
+});
+
+
+// CREATE / SET OR UPDATE custom URL + company name + redirect setting
+router.post("/set-url", authMiddleware, async (req, res) => {
+  const { url, companyName, redirectFromRating } = req.body;
+  if (!url)
+    return res.status(400).json({ success: false, message: "URL is required" });
+  if (!companyName)
+    return res.status(400).json({ success: false, message: "Company name is required" });
+  if (
+    redirectFromRating !== undefined &&
+    (redirectFromRating < 1 || redirectFromRating > 5)
+  ) {
+    return res.status(400).json({
+      success: false,
+      message: "redirectFromRating must be between 1 to 5",
+    });
+  }
+  try {
+    let existing = await CustomURL.findOne({ user: req.user._id });
+    if (existing) {
+      existing.url = url;
+      existing.companyName = companyName;
+      if (redirectFromRating !== undefined) {
+        existing.redirectFromRating = redirectFromRating;
+      }
+      await existing.save();
+    } else {
+      existing = await CustomURL.create({
+        user: req.user._id,
+        url,
+        companyName,
+        redirectFromRating: redirectFromRating ?? 3,
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Custom URL & redirect setting saved successfully",
+      data: existing,
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
   }
 });
 
