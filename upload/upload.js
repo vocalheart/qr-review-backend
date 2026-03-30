@@ -9,7 +9,6 @@ import dotenv from "dotenv";
 dotenv.config();
 const router = express.Router();
 
-// AWS S3 CLIENT
 const s3 = new S3Client({
   region: process.env.AWS_REGION,
   credentials: {
@@ -17,7 +16,7 @@ const s3 = new S3Client({
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
   },
 });
-//Function to generate 10 digit random ID
+
 const generateRandomId = () => {
   return Math.random().toString().slice(2, 12); // 10 digits
 };
