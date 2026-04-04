@@ -76,7 +76,6 @@ app.post("/api/subscription-webhook", express.raw({ type: "*/*" }), async (req, 
       case "subscription.activated":
         await handleSubscriptionActivated(payload.subscription.entity);
         break;
-
       // ── Recurring charge success ──
       case "subscription.charged":
         await handleSubscriptionCharged(
@@ -84,23 +83,18 @@ app.post("/api/subscription-webhook", express.raw({ type: "*/*" }), async (req, 
           payload.subscription.entity
         );
         break;
-
       // ── Cycle completed – keep active till currentEnd ──
       case "subscription.completed":
         console.log("Subscription cycle completed");
         await handleSubscriptionCompleted(payload.subscription.entity);
         break;
-
       case "subscription.cancelled":
         await handleSubscriptionCancelled(payload.subscription.entity);
         break;
-
       default:
         console.log("Unhandled event:", event.event);
     }
-
     return res.json({ success: true });
-
   } catch (err) {
     console.error("Webhook error:", err);
     return res.status(500).json({ success: false });
@@ -270,7 +264,7 @@ app.get("/", async (req, res) => {
 /* ======================================================
    START
    ====================================================== */
-const PORT = process.env.PORT || 6000;
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on port ${PORT}`);
 });

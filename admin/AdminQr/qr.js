@@ -138,10 +138,8 @@ router.get("/all-qrs", AdminAuthMiddleware, async (req, res) => {
       page: currentPage,
       limit: perPage,
       totalPages: Math.ceil(total / perPage),
-
       next: skip + perPage < total ? currentPage + 1 : null,
       previous: currentPage > 1 ? currentPage - 1 : null,
-
       data: qrs,
     });
 

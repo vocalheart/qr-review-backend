@@ -12,12 +12,10 @@ import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import QrImage from "../models/QrImage.js";
 const router = express.Router();
 
-// --- Utility: Generate OTP ---
-
+// ---- Utility: Generate OTP ----
 function generateOtp() { 
   return Math.floor(100000 + Math.random() * 900000).toString();
 };
-
 
 // --- Middleware: Verify JWT ---
 const verifyToken = (req, res, next) => {
@@ -98,7 +96,7 @@ router.post("/signup", async (req, res) => {
   }
 });
 
-// --- Login ---
+
 // --- Login ---
 router.post("/login", async (req, res) => {
   const { email, password } = req.body;
@@ -115,7 +113,6 @@ router.post("/login", async (req, res) => {
         message: "Your account has been blocked. Please contact support.",
       });
     }
-
     // 3. Password check
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
@@ -182,7 +179,6 @@ router.post("/logout", (req, res) => {
     domain: ".reviewbadhao.com",
     path: "/",
   });
-
   return res.status(200).json({
     success: true,
     message: "Logout successful",
@@ -284,8 +280,6 @@ router.post("/change-password", verifyToken, async (req, res) => {
     res.status(500).json({ message: "Password change failed" });
   }
 });
-
-
 
 
 // --- Delete Account ---

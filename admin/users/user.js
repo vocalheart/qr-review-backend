@@ -13,7 +13,7 @@ const router = express.Router();
  * @route   POST /api/admin/create
  * @desc    SuperAdmin - Create new Admin or SuperAdmin
  * @access  Private
- */
+ **/
 router.post("/create", superAdminMiddleware, async (req, res) => {
   try {
     const { name, email, password, role } = req.body;
@@ -169,7 +169,6 @@ router.post("/forgot-password", async (req, res) => {
         message: "If an account with this email exists, a password reset link has been sent.",
       });
     }
-
     const resetToken = crypto.randomBytes(32).toString("hex");
     admin.resetPasswordToken = resetToken;
     admin.resetPasswordExpire = Date.now() + 15 * 60 * 1000;
