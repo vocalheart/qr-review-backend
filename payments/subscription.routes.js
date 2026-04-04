@@ -72,7 +72,7 @@ router.get("/admin/get-plans", authMiddleware, async (req, res) => {
 
 router.post("/create-subscription", authMiddleware, async (req, res) => {
   try {
-    const { planType } = req.body; // monthly / quarterly / yearly
+    const { planType } = req.body;
 
     let planId;
     let amount;
@@ -151,7 +151,7 @@ router.post("/create-subscription", authMiddleware, async (req, res) => {
       userId: req.user._id,
       subscriptionId: subscription.id,
       planId: planId,
-      planType: planType, // ← save planType so we can show label later
+      planType: planType, 
       shortUrl: subscription.short_url,
       type: "subscription",
       status: "created",
