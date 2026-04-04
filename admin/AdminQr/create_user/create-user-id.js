@@ -41,7 +41,7 @@ router.post("/send-create-user-otp", AdminMiddleware, async (req, res) => {
     // Validation
     if (!username || !email || !phone || !randomId) {
       return res.status(400).json({success: false, message: "username, email, phone and randomId required"});
-    }
+    };
     // Check existing email
     const existemail = await User.findOne({ email });
     if (existemail) {return res.status(400).json({success: false,message: "Email already exists"})}
