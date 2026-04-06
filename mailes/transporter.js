@@ -10,6 +10,9 @@ export const sendMail = async (to, subject, text) => {
         user: process.env.GMAIL_USER,
         pass: process.env.GMAIL_APP_PASSWORD,
       },
+       tls: {
+       rejectUnauthorized: false, // FIX
+  },
     });
     const mailOptions = {
       from: `"Qr Review Us Software" <${process.env.GMAIL_USER}>`,

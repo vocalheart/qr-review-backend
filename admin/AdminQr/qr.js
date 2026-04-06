@@ -11,7 +11,6 @@ import { PutObjectCommand } from "@aws-sdk/client-s3";
 
 
 // ================== Upload QR ==================
-
 router.post("/upload-qr", AdminAuthMiddleware, async (req, res) => {
   try {
     const { image, randomId, formUrl } = req.body;
@@ -28,7 +27,6 @@ router.post("/upload-qr", AdminAuthMiddleware, async (req, res) => {
         message: "Invalid image format",
       });
     }
-
     if (!randomId || !formUrl) {
       return res.status(400).json({
         success: false,
@@ -121,11 +119,8 @@ router.get("/my-qrs", AdminAuthMiddleware, async (req, res) => {
 router.get("/all-qrs", AdminAuthMiddleware, async (req, res) => {
   try {
     const { page, limit } = req.query;
-
     const { currentPage, perPage, skip } = getPagination(page, limit);
-
     const total = await QR.countDocuments();
-
     const qrs = await QR.find()
       .populate("admin", "name email")
       .sort({ createdAt: -1 })
@@ -153,4 +148,4 @@ router.get("/all-qrs", AdminAuthMiddleware, async (req, res) => {
   }
 });
 
-export default router;
+export default router

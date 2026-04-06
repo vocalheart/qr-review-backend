@@ -50,31 +50,25 @@ router.post("/send-create-user-otp", AdminMiddleware, async (req, res) => {
         message: "username, email, phone and randomId are required",
       });
     }
-
     // Check if email or phone already exists
     const existEmail = await User.findOne({ email });
     if (existEmail) {
       return res.status(400).json({ success: false, message: "Email already exists" });
     }
-
     const existPhone = await User.findOne({ phone });
     if (existPhone) {
       return res.status(400).json({ success: false, message: "Phone number already exists" });
     }
-
     // Check QR validity
     const qrData = await Qr.findOne({ randomId });
     if (!qrData) {
       return res.status(404).json({ success: false, message: "QR not found" });
     }
-
     if (qrData.isActive) {
       return res.status(400).json({ success: false, message: "QR already assigned" });
     }
-
     const otp = generateOtp();
     const expTime = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
-
     // Store data temporarily
     otpStore.set(email, {
       otp,
@@ -83,7 +77,6 @@ router.post("/send-create-user-otp", AdminMiddleware, async (req, res) => {
       phone,
       randomId,
     });
-
     // Send OTP Email
     await transporter.sendMail({
       from: process.env.GMAIL_USER,
@@ -97,7 +90,6 @@ router.post("/send-create-user-otp", AdminMiddleware, async (req, res) => {
         <p>Please do not share this OTP.</p>
       `,
     });
-
     return res.status(200).json({
       success: true,
       message: "OTP sent successfully to your email",
@@ -117,16 +109,13 @@ router.post("/send-create-user-otp", AdminMiddleware, async (req, res) => {
 router.post("/verify-create-user-otp", AdminMiddleware, async (req, res) => {
   try {
     const { email, otp, randomId } = req.body;
-
     if (!email || !otp || !randomId) {
       return res.status(400).json({
         success: false,
         message: "email, otp and randomId are required",
       });
     }
-
     const otpData = otpStore.get(email);
-
     if (!otpData) {
       return res.status(400).json({
         success: false,
@@ -137,7 +126,6 @@ router.post("/verify-create-user-otp", AdminMiddleware, async (req, res) => {
     if (otpData.otp !== otp) {
       return res.status(400).json({ success: false, message: "Invalid OTP" });
     }
-
     if (otpData.exp < new Date()) {
       otpStore.delete(email);
       return res.status(400).json({ success: false, message: "OTP has expired" });
@@ -153,11 +141,9 @@ router.post("/verify-create-user-otp", AdminMiddleware, async (req, res) => {
       otpStore.delete(email);
       return res.status(400).json({ success: false, message: "QR is no longer available" });
     }
-
     // Generate password
     const plainPassword = generatePassword();
     const hashedPassword = await bcrypt.hash(plainPassword, 10);
-
     // === CREATE USER ONLY AFTER SUCCESSFUL OTP VERIFICATION ===
     const user = await User.create({
       username: otpData.username,

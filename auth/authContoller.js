@@ -48,35 +48,78 @@ console.log("AWS BUCKET:", process.env.AWS_BUCKET_NAME);
 const generateRandomId = () => {
   return Math.random().toString().slice(2, 12);
 };
-
-// --- Signup ---
+// --- Signup (SEND OTP ONLY) ---
 router.post("/signup", async (req, res) => {
-  const { username, email, password } = req.body;
-
+  const { username, email, password, phone } = req.body;
   try {
     const existUser = await Signup.findOne({ email });
     if (existUser) {
       return res.status(400).json({ message: "User already exists" });
     }
-    // 1️ Create User
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const newUser = new Signup({
-      username,
-      email,
-      password: hashedPassword,
+
+    // Generate OTP
+    const otp = generateOtp();
+
+    // TEMP TOKEN (store user data)
+    const tempToken = jwt.sign(
+      { username, email, password, phone, otp },
+      process.env.JWT_SECRET,
+      { expiresIn: "5m" }
+    );
+
+    // Send OTP mail
+    await sendMail(email, "OTP Verification", `Your OTP is: ${otp}`);
+
+    res.cookie("tempToken", tempToken, {
+      httpOnly: true,
+      secure: false,
+      sameSite: "lax",
+      maxAge: 5 * 60 * 1000,
     });
 
+    res.json({ success: true, message: "OTP sent to email" });
+
+  } catch (error) {
+    console.log("Error during signup:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+// --- Verify OTP + FINAL SIGNUP ---
+router.post("/verify-otp", async (req, res) => {
+  const { otp } = req.body;
+  const tempToken = req.cookies.tempToken;
+
+  if (!tempToken) {
+    return res.status(400).json({ message: "OTP expired" });
+  }
+
+  try {
+    const decoded = jwt.verify(tempToken, process.env.JWT_SECRET);
+
+    if (decoded.otp !== otp) {
+      return res.status(400).json({ message: "Invalid OTP" });
+    }
+    // HASH PASSWORD
+    const hashedPassword = await bcrypt.hash(decoded.password, 10);
+    //  CREATE USER (NOW AFTER OTP VERIFIED)
+    const newUser = new Signup({
+      username: decoded.username,
+      email: decoded.email,
+      phone: decoded.phone,
+      password: hashedPassword,
+    });
     await newUser.save();
-    // 2️AUTO GENERATE QR AFTER SIGNUP 
+    // ===========================
+    // YOUR SAME QR CODE LOGIC (UNCHANGED)
+    // ===========================
     const randomId = generateRandomId();
     const redirectURL = `https://www.reviewbadhao.com/form/${randomId}`;
-    // Generate QR Buffer
     const qrBuffer = await QRCode.toBuffer(redirectURL, {
       type: "png",
       width: 600,
       errorCorrectionLevel: "H",
     });
-    // Upload to S3
     const fileName = `qr-${newUser._id}-${randomId}.png`;
     await s3.send(
       new PutObjectCommand({
@@ -87,15 +130,24 @@ router.post("/signup", async (req, res) => {
       })
     );
     const imageUrl = `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileName}`;
-    //Save QR in MongoDB
-    await QrImage.create({ user: newUser._id, imageUrl, s3Key: fileName, randomId: randomId, data: redirectURL });
-    res.status(201).json({ success: true, message: "User registered  successfully" });
+    await QrImage.create({
+      user: newUser._id,
+      imageUrl,
+      s3Key: fileName,
+      randomId: randomId,
+      data: redirectURL,
+    });
+    // ===========================
+    res.clearCookie("tempToken");
+    res.status(201).json({
+      success: true,
+      message: "User registered successfully with QR"
+    });
   } catch (error) {
-    console.log("Error during signup:", error);
-    res.status(500).json({ message: "Internal server error" });
+    console.log("OTP verify error:", error);
+    res.status(400).json({ message: "Invalid or expired OTP" });
   }
 });
-
 
 // --- Login ---
 router.post("/login", async (req, res) => {
