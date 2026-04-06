@@ -149,6 +149,59 @@ router.post("/verify-otp", async (req, res) => {
   }
 });
 
+// --- Resend OTP ---
+router.post("/resend-otp", async (req, res) => {
+  const tempToken = req.cookies.tempToken;
+
+  if (!tempToken) {
+    return res.status(400).json({ message: "Session expired. Signup again." });
+  }
+
+  try {
+    const decoded = jwt.verify(tempToken, process.env.JWT_SECRET);
+
+    // NEW OTP generate
+    const newOtp = generateOtp();
+
+    // NEW TOKEN create with same data + new OTP
+    const newTempToken = jwt.sign(
+      {
+        username: decoded.username,
+        email: decoded.email,
+        password: decoded.password,
+        phone: decoded.phone,
+        otp: newOtp,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "5m" }
+    );
+
+    // Send mail again
+    await sendMail(
+      decoded.email,
+      "Resend OTP",
+      `Your new OTP is: ${newOtp}`
+    );
+
+    // Update cookie
+    res.cookie("tempToken", newTempToken, {
+      httpOnly: true,
+      secure: false,
+      sameSite: "lax",
+      maxAge: 5 * 60 * 1000,
+    });
+
+    res.json({
+      success: true,
+      message: "OTP resent successfully",
+    });
+
+  } catch (error) {
+    console.log("Resend OTP error:", error);
+    res.status(400).json({ message: "Invalid or expired session" });
+  }
+});
+
 // --- Login ---
 router.post("/login", async (req, res) => {
   const { email, password } = req.body;
