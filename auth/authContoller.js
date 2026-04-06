@@ -13,7 +13,7 @@ import QrImage from "../models/QrImage.js";
 const router = express.Router();
 
 // ---- Utility: Generate OTP ----
-function generateOtp() { 
+function generateOtp() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 };
 
@@ -84,11 +84,10 @@ router.post("/signup", async (req, res) => {
 
     res.cookie("tempToken", tempToken, {
       httpOnly: true,
-      secure: false,
-      sameSite: "none",
+      secure: true,        //  MUST in production
+      sameSite: "none",    // cross-origin ke liye
       maxAge: 10 * 60 * 1000,
     });
-
     res.json({
       success: true,
       message: "OTP sent to your email",
@@ -211,10 +210,10 @@ router.post("/resend-otp", async (req, res) => {
       `Your new OTP is: ${newOtp}\n\nValid for 10 minutes.`
     );
 
-    res.cookie("tempToken", newTempToken, {
+    res.cookie("tempToken",  newTempToken, {
       httpOnly: true,
-      secure: false,
-      sameSite: "none",
+      secure: true,        // MUST in production
+      sameSite: "none",    // cross-origin ke liye
       maxAge: 10 * 60 * 1000,
     });
 
@@ -314,7 +313,7 @@ router.post("/logout", (req, res) => {
   return res.status(200).json({
     success: true,
     message: "Logout successful",
-  });  
+  });
 });
 
 
