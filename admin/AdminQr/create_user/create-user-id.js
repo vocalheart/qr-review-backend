@@ -24,7 +24,7 @@ const transporter = nodemailer.createTransport({
 
 // Password Generator Function
 const generatePassword = () => {
-  return crypto.randomBytes(6).toString("hex"); // 12 char password
+  return crypto.randomBytes(6).toString("hex"); // 12 character password
 };
 
 // OTP Generator
@@ -32,73 +32,78 @@ const generateOtp = () => {
   return Math.floor(100000 + Math.random() * 900000).toString();
 };
 
-//
-// 1. SEND OTP FOR CREATE USER
-//
+// Temporary OTP Storage (in-memory)
+// For production: Replace with Redis + TTL
+const otpStore = new Map(); // key: email → { otp, exp, username, phone, randomId }
+
+// 
+// 1. SEND OTP FOR CREATE USER (No user is created yet)
+//  
+
 router.post("/send-create-user-otp", AdminMiddleware, async (req, res) => {
   try {
     const { username, email, phone, randomId } = req.body;
-    // Validation
+
     if (!username || !email || !phone || !randomId) {
-      return res.status(400).json({success: false, message: "username, email, phone and randomId required"});
-    };
-    // Check existing email
-    const existemail = await User.findOne({ email });
-    if (existemail) {return res.status(400).json({success: false,message: "Email already exists"})}
-    // Check existing phone
+      return res.status(400).json({
+        success: false,
+        message: "username, email, phone and randomId are required",
+      });
+    }
+
+    // Check if email or phone already exists
+    const existEmail = await User.findOne({ email });
+    if (existEmail) {
+      return res.status(400).json({ success: false, message: "Email already exists" });
+    }
+
     const existPhone = await User.findOne({ phone });
     if (existPhone) {
-      return res.status(400).json({
-        success: false,
-        message: "Phone number already exists",
-      });
+      return res.status(400).json({ success: false, message: "Phone number already exists" });
     }
-    // Find QR
+
+    // Check QR validity
     const qrData = await Qr.findOne({ randomId });
     if (!qrData) {
-      return res.status(404).json({
-        success: false,
-        message: "QR not found",
-      });
+      return res.status(404).json({ success: false, message: "QR not found" });
     }
-    // Check QR already assigned
+
     if (qrData.isActive) {
-      return res.status(400).json({
-        success: false,
-        message: "QR already assigned",
-      });
+      return res.status(400).json({ success: false, message: "QR already assigned" });
     }
+
     const otp = generateOtp();
-    const expTime = new Date(Date.now() + 5 * 60 * 1000); // 5 min
-    let user = await User.findOne({ email });
-    if (!user) {
-      user = new User({
-        username,
-        email,
-        phone,
-        password: "temp123456",
-      });
-    } else {
-      user.username = username;
-      user.phone = phone;
-    }
-    user.verifyOtp = { otp, exp: expTime };
-    user.createAccounteEmailVerificationOtp = true;
-    await user.save();
+    const expTime = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+
+    // Store data temporarily
+    otpStore.set(email, {
+      otp,
+      exp: expTime,
+      username,
+      phone,
+      randomId,
+    });
+
+    // Send OTP Email
     await transporter.sendMail({
       from: process.env.GMAIL_USER,
       to: email,
-      subject: "OTP Verification",
+      subject: "OTP for Account Creation",
       html: `
         <h2>Hello ${username},</h2>
-        <p>Your OTP for account creation is:</p>
+        <p>Your OTP for creating new account is:</p>
         <h1>${otp}</h1>
-        <p>This OTP is valid for 5 minutes.</p>
+        <p>This OTP is valid for 5 minutes only.</p>
+        <p>Please do not share this OTP.</p>
       `,
     });
-    return res.status(200).json({success: true,message: "OTP sent successfully"});
+
+    return res.status(200).json({
+      success: true,
+      message: "OTP sent successfully to your email",
+    });
   } catch (error) {
-    console.error(error);
+    console.error("Send OTP Error:", error);
     return res.status(500).json({
       success: false,
       message: "Error sending OTP",
@@ -107,7 +112,7 @@ router.post("/send-create-user-otp", AdminMiddleware, async (req, res) => {
 });
 
 //
-// 2. VERIFY OTP AND CREATE USER ACCOUNT
+// 2. VERIFY OTP AND CREATE USER (User created only here)
 //
 router.post("/verify-create-user-otp", AdminMiddleware, async (req, res) => {
   try {
@@ -116,64 +121,53 @@ router.post("/verify-create-user-otp", AdminMiddleware, async (req, res) => {
     if (!email || !otp || !randomId) {
       return res.status(400).json({
         success: false,
-        message: "email, otp and randomId required",
+        message: "email, otp and randomId are required",
       });
     }
 
-    const user = await User.findOne({ email });
+    const otpData = otpStore.get(email);
 
-    if (!user || !user.verifyOtp) {
+    if (!otpData) {
       return res.status(400).json({
         success: false,
-        message: "OTP not found",
+        message: "No OTP request found for this email",
       });
     }
-
-    if (user.verifyOtp.otp !== otp) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid OTP",
-      });
+    // OTP validation
+    if (otpData.otp !== otp) {
+      return res.status(400).json({ success: false, message: "Invalid OTP" });
     }
 
-    if (user.verifyOtp.exp < new Date()) {
-      return res.status(400).json({
-        success: false,
-        message: "OTP expired",
-      });
+    if (otpData.exp < new Date()) {
+      otpStore.delete(email);
+      return res.status(400).json({ success: false, message: "OTP has expired" });
     }
 
-    // Find QR
+    if (otpData.randomId !== randomId) {
+      return res.status(400).json({ success: false, message: "Invalid QR for this request" });
+    }
+
+    // Final QR check
     const qrData = await Qr.findOne({ randomId });
-    if (!qrData) {
-      return res.status(404).json({
-        success: false,
-        message: "QR not found",
-      });
+    if (!qrData || qrData.isActive) {
+      otpStore.delete(email);
+      return res.status(400).json({ success: false, message: "QR is no longer available" });
     }
 
-    // Check already used
-    if (qrData.isActive) {
-      return res.status(400).json({
-        success: false,
-        message: "QR already assigned",
-      });
-    }
-
-    // Generate Password
+    // Generate password
     const plainPassword = generatePassword();
-
-    // Hash Password
     const hashedPassword = await bcrypt.hash(plainPassword, 10);
 
-    user.password = hashedPassword;
-    user.isVerified = true;
-    user.verifyOtp = undefined;
-    user.createAccounteEmailVerificationOtp = false;
+    // === CREATE USER ONLY AFTER SUCCESSFUL OTP VERIFICATION ===
+    const user = await User.create({
+      username: otpData.username,
+      email: email,
+      phone: otpData.phone,
+      password: hashedPassword,
+      isVerified: true,
+    });
 
-    await user.save();
-
-    // Mark QR active
+    // Activate QR
     qrData.isActive = true;
     await qrData.save();
 
@@ -186,141 +180,42 @@ router.post("/verify-create-user-otp", AdminMiddleware, async (req, res) => {
       data: qrData.qrUrl,
     });
 
-    // Send Email
+    // Send Welcome Email with Credentials
     await transporter.sendMail({
       from: process.env.GMAIL_USER,
       to: email,
-      subject: "Your Account Created Successfully",
+      subject: "Account Created Successfully",
       html: `
         <h2>Hello ${user.username},</h2>
-        <p>Your account has been successfully verified and activated.</p>
+        <p>Your account has been successfully created and verified.</p>
         <p><b>Email:</b> ${email}</p>
         <p><b>Phone:</b> ${user.phone}</p>
         <p><b>Password:</b> ${plainPassword}</p>
         <br/>
-        <p>Please login and change your password immediately.</p>
+        <p><strong>Security Note:</strong> Please login and change your password immediately.</p>
       `,
     });
 
-    return res.status(201).json({
-      success: true,
-      message: "Account created after OTP verification",
-      user,
-      qrImage,
-    });
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({
-      success: false,
-      message: "Something went wrong",
-    });
-  }
-});
-
-//
-// 3. DIRECT CREATE USER
-//
-router.post("/create-user", AdminMiddleware, async (req, res) => {
-  try {
-    const { username, email, phone, randomId } = req.body;
-
-    // Validation
-    if (!username || !email || !phone || !randomId) {
-      return res.status(400).json({
-        success: false,
-        message: "username, email, phone and randomId required",
-      });
-    }
-
-    // Check email
-    const existemail = await User.findOne({ email });
-    if (existemail) {
-      return res.status(400).json({
-        success: false,
-        message: "Email already exists",
-      });
-    }
-
-    // Check phone
-    const existPhone = await User.findOne({ phone });
-    if (existPhone) {
-      return res.status(400).json({
-        success: false,
-        message: "Phone number already exists",
-      });
-    }
-
-    // Find QR
-    const qrData = await Qr.findOne({ randomId });
-    if (!qrData) {
-      return res.status(404).json({
-        success: false,
-        message: "QR not found",
-      });
-    }
-
-    // Check already used
-    if (qrData.isActive) {
-      return res.status(400).json({
-        success: false,
-        message: "QR already assigned",
-      });
-    }
-
-    // Generate Password
-    const plainPassword = generatePassword();
-
-    // Hash Password
-    const hashedPassword = await bcrypt.hash(plainPassword, 10);
-
-    // Create user
-    const user = await User.create({
-      username,
-      email,
-      phone,
-      password: hashedPassword,
-      isVerified: true,
-    });
-    // Mark QR active
-    qrData.isActive = true;
-    await qrData.save();
-
-    // Save QR Image
-    const qrImage = await QrImage.create({
-      user: user._id,
-      imageUrl: qrData.imageUrl,
-      s3Key: "optional",
-      randomId: qrData.randomId,
-      data: qrData.qrUrl,
-    });
-
-    // Send Email
-    await transporter.sendMail({
-      from: process.env.GMAIL_USER,
-      to: email,
-      subject: "Your Account Created Successfully",
-      html: `
-        <h2>Hello ${username},</h2>
-        <p>Your account has been successfully activated.</p>
-        <p><b>Email:</b> ${email}</p>
-        <p><b>Phone:</b> ${phone}</p>
-        <p><b>Password:</b> ${plainPassword}</p>
-        <br/>
-        <p>Please login and change your password immediately.</p>
-      `,
-    });
+    // Clean up OTP
+    otpStore.delete(email);
 
     return res.status(201).json({
       success: true,
-      message: "User created & email sent successfully",
-      user,
+      message: "User account created successfully",
+      user: {
+        _id: user._id,
+        username: user.username,
+        email: user.email,
+        phone: user.phone,
+        isVerified: user.isVerified,
+      },
       qrImage,
     });
   } catch (error) {
-    console.error(error);
+    console.error("Create User Error:", error);
     return res.status(500).json({
       success: false,
-      message: "Something went wrong",
+      message: "Something went wrong while creating account",
     });
   }
 });

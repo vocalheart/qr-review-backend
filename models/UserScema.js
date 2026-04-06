@@ -11,17 +11,19 @@ const UserSchema = new mongoose.Schema({
     verifyOtp: { otp: String, exp: Date },
 
     // OTP flags
-    createAccounteEmailVerificationOtp: {
-        type: Boolean,
-        default: false,
+ // OTP fields (only these two are needed)
+    sendOtp: { 
+        otp: String, 
+        exp: Date 
     },
-    sendOtpVerificationOtp: {
-        type: Boolean,
-        default: false,
+    verifyOtp: { 
+        otp: String, 
+        exp: Date 
     },
 
     // Email verification
     isVerified: { type: Boolean, default: false },
+
 
     // Admin fields
     isBlocked: { type: Boolean, default: false },
