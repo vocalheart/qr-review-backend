@@ -54,13 +54,11 @@ const generateRandomId = () => {
 
 router.post("/signup", async (req, res) => {
   const { username, email, password, phone } = req.body;
-
   try {
     // Validate phone
     if (!phone || !/^\d{10}$/.test(phone)) {
       return res.status(400).json({ message: "Valid 10-digit phone number is required" });
     }
-
     const existUser = await Signup.findOne({ email });
     if (existUser) {
       return res.status(400).json({ message: "User already exists with this email" });
@@ -266,7 +264,7 @@ router.post("/login", async (req, res) => {
       httpOnly: true,
       secure: true,
       sameSite: "none",
-      domain: ".reviewbadhao.com",
+      // domain: ".reviewbadhao.com",
       path: "/",
       maxAge: 100 * 365 * 24 * 60 * 60 * 1000,
     });
@@ -299,15 +297,13 @@ router.get("/auth/me", verifyToken, async (req, res) => {
   }
 });
 
-
-
 // --------- Logout ----------- //
 router.post("/logout", (req, res) => {
   res.clearCookie("token", {
     httpOnly: true,
     secure: true,
     sameSite: "none",
-    domain: ".reviewbadhao.com",
+    // domain: ".reviewbadhao.com",
     path: "/",
   });
   return res.status(200).json({
@@ -404,7 +400,7 @@ router.post("/change-password", verifyToken, async (req, res) => {
     const hashed = await bcrypt.hash(newPassword, 10);
     user.password = hashed;
     await user.save();
-
+    
     res.json({ success: true, message: "Password changed successfully" });
   } catch (err) {
     console.error(err);

@@ -236,5 +236,74 @@ router.get("/get-url", authMiddleware, async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 });
+
+router.post("/increase-rating/:qrId", async (req, res) => {
+  try {
+    const { qrId } = req.params;
+    const { rating } = req.body;
+
+    const qr = await QrImage.findOne({ randomId: qrId });
+
+    if (!qr) {
+      return res.status(404).json({
+        success: false,
+        message: "QR not found",
+      });
+    }
+
+    const customURL = await CustomURL.findOne({ user: qr.user });
+
+    if (!customURL) {
+      return res.status(404).json({
+        success: false,
+        message: "Custom URL not found",
+      });
+    }
+
+    if (rating === 1) customURL.oneStarCount += 1;
+    if (rating === 2) customURL.twoStarCount += 1;
+    if (rating === 3) customURL.threeStarCount += 1;
+    if (rating === 4) customURL.fourStarCount += 1;
+    if (rating === 5) customURL.fiveStarCount += 1;
+
+    await customURL.save();
+
+    res.json({
+      success: true,
+      message: "Rating counted",
+    });
+
+  } catch (err) {
+    console.error(err);
+
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+});
+
+router.get("/analytics", authMiddleware, async (req, res) => {
+  try {
+
+    const customURL = await CustomURL.findOne({user: req.user._id,});
+    if (!customURL) {return res.status(404).json({success: false,message: "Analytics not found"})}
+    res.json({
+      success: true,
+      analytics: {
+        totalViews: customURL.totalViews || 0,
+        oneStarCount: customURL.oneStarCount || 0,
+        twoStarCount: customURL.twoStarCount || 0,
+        threeStarCount: customURL.threeStarCount || 0,
+        fourStarCount: customURL.fourStarCount || 0,
+        fiveStarCount: customURL.fiveStarCount || 0,
+      },
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({success: false,message: err.message});
+  }
+});
 export default router;
 

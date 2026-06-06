@@ -20,10 +20,11 @@ const s3 = new S3Client({
 const generateRandomId = () => {
   return Math.random().toString().slice(2, 12); // 10 digits
 };
-
+ 
 // =============================================================
 // Generate QR (One-time only)
 // =============================================================
+
 router.post("/generate-qr", authMiddleware, async (req, res) => {
   try {
     const userId = req.user._id;
@@ -36,7 +37,6 @@ router.post("/generate-qr", authMiddleware, async (req, res) => {
         qr: already,
       });
     }
-
     // Generate 10-digit ID
     const randomId = generateRandomId();
     // Create redirect link
@@ -60,7 +60,7 @@ router.post("/generate-qr", authMiddleware, async (req, res) => {
       })
     );
     const imageUrl = `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileName}`;
-    // Save in MongoDB
+    // Save in MongoDB with user reference
     const qrDoc = await QrImage.create({
       user: userId,
       imageUrl,
@@ -80,8 +80,9 @@ router.post("/generate-qr", authMiddleware, async (req, res) => {
 });
 
 // =============================================================
-//  Get My QR
+//  Get My QR ------ If not exists, auto generate (From S3 + DB)
 // =============================================================
+
 router.get("/my-qr", authMiddleware, async (req, res) => {
   try {
     let qr = await QrImage.findOne({ user: req.user._id });
@@ -119,10 +120,10 @@ router.get("/my-qr", authMiddleware, async (req, res) => {
 });
 
 
-
 // =============================================================
 //  DELETE QR (From S3 + DB)
 // =============================================================
+
 router.delete("/delete-qr", authMiddleware, async (req, res) => {
   try {
     const qr = await QrImage.findOne({ user: req.user._id });
