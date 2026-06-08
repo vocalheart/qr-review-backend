@@ -86,8 +86,7 @@ router.post("/generate-qr", authMiddleware, async (req, res) => {
 router.get("/my-qr", authMiddleware, async (req, res) => {
   try {
     let qr = await QrImage.findOne({ user: req.user._id });
-
-    //AUTO GENERATE IF NOT EXISTS
+    //-----------------AUTO GENERATE IF NOT EXISTS----------------------//
     if (!qr) {
       const randomId = Math.random().toString().slice(2, 12);
       const redirectURL = `https://www.reviewbadhao.com/form/${randomId}`;
@@ -140,7 +139,6 @@ router.delete("/delete-qr", authMiddleware, async (req, res) => {
         message: "Error: QR s3Key missing in database",
       });
     }
-
     // Delete from S3
     await s3.send(
       new DeleteObjectCommand({

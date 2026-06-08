@@ -282,16 +282,31 @@ router.post("/increase-rating/:qrId", async (req, res) => {
     });
   }
 });
-
 router.get("/analytics", authMiddleware, async (req, res) => {
   try {
+    const customURL = await CustomURL.findOne({
+      user: req.user._id,
+    });
 
-    const customURL = await CustomURL.findOne({user: req.user._id,});
-    if (!customURL) {return res.status(404).json({success: false,message: "Analytics not found"})}
+    if (!customURL) {
+      return res.status(404).json({
+        success: false,
+        message: "Analytics not found",
+      });
+    }
+
+    // Total reviews/views calculate
+    const totalViews =
+      (customURL.oneStarCount || 0) +
+      (customURL.twoStarCount || 0) +
+      (customURL.threeStarCount || 0) +
+      (customURL.fourStarCount || 0) +
+      (customURL.fiveStarCount || 0);
+
     res.json({
       success: true,
       analytics: {
-        totalViews: customURL.totalViews || 0,
+        totalViews,
         oneStarCount: customURL.oneStarCount || 0,
         twoStarCount: customURL.twoStarCount || 0,
         threeStarCount: customURL.threeStarCount || 0,
@@ -299,10 +314,13 @@ router.get("/analytics", authMiddleware, async (req, res) => {
         fiveStarCount: customURL.fiveStarCount || 0,
       },
     });
-
   } catch (err) {
     console.error(err);
-    res.status(500).json({success: false,message: err.message});
+
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
   }
 });
 export default router;
