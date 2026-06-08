@@ -40,7 +40,7 @@ const otpStore = new Map(); // key: email → { otp, exp, username, phone, rando
 // 1. SEND OTP FOR CREATE USER (No user is created yet)
 //  
 
-router.post("/send-create-user-otp", AdminMiddleware, async (req, res) => {
+router.post("/send-create-user-otp", async (req, res) => {
   try {
     const { username, email, phone, randomId } = req.body;
 
@@ -106,7 +106,7 @@ router.post("/send-create-user-otp", AdminMiddleware, async (req, res) => {
 //
 // 2. VERIFY OTP AND CREATE USER (User created only here)
 //
-router.post("/verify-create-user-otp", AdminMiddleware, async (req, res) => {
+router.post("/verify-create-user-otp", async (req, res) => {
   try {
     const { email, otp, randomId } = req.body;
     if (!email || !otp || !randomId) {
