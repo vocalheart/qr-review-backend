@@ -17,7 +17,7 @@ const app = express();
 
 // SABSE PEHLE CORS
 app.use(cors({
-  origin: function(origin, callback) {
+  origin: function (origin, callback) {
     const allowedOrigins = [
       "http://localhost:3000",
       "http://localhost:3001",
@@ -41,17 +41,34 @@ app.use(cors({
    RAZORPAY WEBHOOK (RAW BODY – MANDATORY)
 ====================================================== */
 
-app.post("/api/subscription-webhook",express.raw({ type: "*/*" }),async (req, res) => {
+app.post("/api/subscription-webhook",
+  express.raw({ type: "*/*" }),
+  async (req, res) => {
     try {
-      const razorpaySignature =req.headers["x-razorpay-signature"];
-      const webhookSecret =process.env.RAZORPAY_WEBHOOK_SECRET;
+
+      const razorpaySignature =
+        req.headers["x-razorpay-signature"];
+
+      const webhookSecret =
+        process.env.RAZORPAY_WEBHOOK_SECRET;
+
       const body = req.body.toString();
+
       /* ============================================
          VERIFY SIGNATURE
       ============================================ */
-      const expectedSignature = crypto.createHmac("sha256", webhookSecret).update(body).digest("hex");
+
+      const expectedSignature = crypto
+        .createHmac("sha256", webhookSecret)
+        .update(body)
+        .digest("hex");
+
       if (razorpaySignature !== expectedSignature) {
-        console.log("Webhook signature mismatch");
+
+        console.log(
+          "Webhook signature mismatch"
+        );
+
         return res.status(400).json({
           success: false,
           message: "Invalid signature",
@@ -61,65 +78,123 @@ app.post("/api/subscription-webhook",express.raw({ type: "*/*" }),async (req, re
       /* ============================================
          PARSE EVENT
       ============================================ */
+
       const event = JSON.parse(body);
-      console.log("WEBHOOK EVENT:", event.event);
+
+      console.log(
+        "WEBHOOK EVENT:",
+        event.event
+      );
+
       const { payload } = event;
+
       /* ============================================
          EVENTS
       ============================================ */
+
       switch (event.event) {
+
         /* ========================================
            PAYMENT CAPTURED
         ======================================== */
+
         case "payment.captured":
+
           await handlePaymentCaptured(
             payload.payment.entity
           );
+
           break;
+
         /* ========================================
            PAYMENT AUTHORIZED
         ======================================== */
+
         case "payment.authorized":
-          console.log("Payment Authorized:",payload.payment.entity.id);
+
+          console.log(
+            "Payment Authorized:",
+            payload.payment.entity.id
+          );
+
           break;
+
         /* ========================================
            PAYMENT FAILED
         ======================================== */
+
         case "payment.failed":
+
           await handlePaymentFailed(
             payload.payment.entity
           );
+
           break;
+
+        /* ========================================
+           SUBSCRIPTION AUTHENTICATED
+        ======================================== */
+
+        case "subscription.authenticated":
+
+          await handleSubscriptionAuthenticated(
+            payload.subscription.entity
+          );
+
+          break;
+
         /* ========================================
            SUBSCRIPTION ACTIVATED
-        ======================================= */
+        ======================================== */
+
         case "subscription.activated":
+
           await handleSubscriptionActivated(
             payload.subscription.entity
           );
+
           break;
+          
+case "subscription.halted":
+
+  await handleSubscriptionHalted(
+    payload.subscription.entity
+  );
+
+  break;
+
+
         /* ========================================
            SUBSCRIPTION CHARGED
         ======================================== */
 
         case "subscription.charged":
+
           await handleSubscriptionCharged(
             payload.payment.entity,
             payload.subscription.entity
           );
+
           break;
+
         /* ========================================
            SUBSCRIPTION COMPLETED
         ======================================== */
+
         case "subscription.completed":
+
           await handleSubscriptionCompleted(
             payload.subscription.entity
           );
+
           break;
+
         /* ========================================
            SUBSCRIPTION CANCELLED
         ======================================== */
+
         case "subscription.cancelled":
+
           await handleSubscriptionCancelled(
             payload.subscription.entity
           );
@@ -250,7 +325,11 @@ async function handlePaymentCaptured(payment) {
 
 async function handlePaymentFailed(payment) {
 
-  console.log("Payment Failed:",payment.id);
+  console.log(
+    "Payment Failed:",
+    payment.id
+  );
+
   await Payment.updateOne(
     {
       subscriptionId:
@@ -261,6 +340,57 @@ async function handlePaymentFailed(payment) {
 
       failedAt: new Date(),
     }
+  );
+}
+
+/* ======================================================
+   SUBSCRIPTION AUTHENTICATED
+====================================================== */
+
+async function handleSubscriptionAuthenticated(
+  subscription
+) {
+
+  console.log(
+    "Subscription Authenticated:",
+    subscription.id
+  );
+
+  const updateFields = {
+
+    status: "authenticated",
+  };
+
+  if (subscription.current_start) {
+
+    updateFields.currentStart =
+      new Date(
+        subscription.current_start * 1000
+      );
+  }
+
+  if (subscription.current_end) {
+
+    updateFields.currentEnd =
+      new Date(
+        subscription.current_end * 1000
+      );
+  }
+
+  if (subscription.charge_at) {
+
+    updateFields.nextChargeAt =
+      new Date(
+        subscription.charge_at * 1000
+      );
+  }
+
+  await Payment.updateOne(
+    {
+      subscriptionId:
+        subscription.id,
+    },
+    updateFields
   );
 }
 
@@ -315,7 +445,8 @@ async function handleSubscriptionActivated(
 
   await Payment.updateOne(
     {
-      subscriptionId: subscription.id,
+      subscriptionId:
+        subscription.id,
     },
     updateFields
   );
@@ -388,12 +519,15 @@ async function handleSubscriptionCompleted(
     subscription.id
   );
 
+  // KEEP ACTIVE UNTIL currentEnd EXPIRES
+
   await Payment.updateOne(
     {
-      subscriptionId: subscription.id,
+      subscriptionId:
+        subscription.id,
     },
     {
-      status: "completed",
+      status: "active",
     }
   );
 }
@@ -413,7 +547,8 @@ async function handleSubscriptionCancelled(
 
   await Payment.updateOne(
     {
-      subscriptionId: subscription.id,
+      subscriptionId:
+        subscription.id,
     },
     {
       status: "cancelled",
@@ -422,6 +557,34 @@ async function handleSubscriptionCancelled(
     }
   );
 }
+
+/* ======================================================
+   SUBSCRIPTION HALTED
+====================================================== */
+
+async function handleSubscriptionHalted(
+  subscription
+) {
+
+  console.log(
+    "Subscription Halted:",
+    subscription.id
+  );
+
+
+await Payment.updateOne(
+  {
+    subscriptionId:
+      subscription.id,
+  },
+  {
+    status: "halted",
+    failedAt: new Date(),
+  }
+);
+}
+
+
 
 /* ======================================================
    MIDDLEWARES
