@@ -19,7 +19,7 @@ router.post("/admin/create-plan", async (req, res) => {
       interval: 1,
       item: {
         name: "Monthly Plan",
-        amount: 64900, // ₹649
+        amount: 119900, // ₹649
         currency: "INR",
       },
     });
@@ -30,7 +30,7 @@ router.post("/admin/create-plan", async (req, res) => {
       interval: 3,
       item: {
         name: "3 Months Plan",
-        amount: 249900, // ₹2499
+        amount: 299900, // ₹2499
         currency: "INR",
       },
     });
@@ -115,12 +115,12 @@ router.post(
       if (planType === "monthly") {
 
         planId = process.env.RAZORPAY_MONTHLY_PLAN_ID;
-        amount = 64900;
+        amount = 119900;
 
       } else if (planType === "quarterly") {
 
         planId = process.env.RAZORPAY_3MONTH_PLAN_ID;
-        amount = 249900;
+        amount = 299900;
 
       } else if (planType === "yearly") {
 
@@ -446,12 +446,12 @@ router.get("/subscription-status",authMiddleware,async (req, res) => {
 
         [process.env.RAZORPAY_MONTHLY_PLAN_ID]: {
           label: "Monthly Plan",
-          price: "₹649",
+          price: "₹1199",
         },
 
         [process.env.RAZORPAY_3MONTH_PLAN_ID]: {
           label: "3 Months Plan",
-          price: "₹2499",
+          price: "₹2999"
         },
 
         [process.env.RAZORPAY_YEARLY_PLAN_ID]: {
