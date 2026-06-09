@@ -5,7 +5,7 @@ import { authMiddleware } from "../middleware/authMiddleware.js";
 import CustomURL from "../models/CustomURL.js";
 import QrImage from "../models/QrImage.js";
 import LogoImage from "../models/LogoImage.js";
-import Payment  from '../models/Payment.js';
+import Payment from '../models/Payment.js';
 import Qr from '../admin/AdminQr/models/qrSchema.js';
 
 const router = express.Router();
@@ -18,12 +18,8 @@ router.get("/get-url/:qrId", async (req, res) => {
     if (qr) {
       //  Check subscription
       const today = new Date();
-      const activeSubscription = await Payment.findOne({
-        userId: qr.user,
-        type: "subscription",
-        status: "active",
-        currentEnd: { $gt: today },
-      });
+       const activeSubscription = await Payment.findOne({ userId: qr.user, type: "subscription", status: { $in: ["active", "authenticated"], }, $or: [{ currentEnd: { $gt: today }, }, { trialEnd: { $gt: today }, },], });
+
       if (!activeSubscription) {
         return res.json({
           success: true,
@@ -180,7 +176,7 @@ router.put("/update-url", authMiddleware, async (req, res) => {
       message: "Custom URL, Company Name & Redirect setting updated",
       data: customURL,
     });
-    
+
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: err.message });
@@ -204,7 +200,7 @@ router.delete("/delete-url", authMiddleware, async (req, res) => {
 router.get("/get-url", authMiddleware, async (req, res) => {
   try {
     const customURL = await CustomURL.findOne({ user: req.user._id });
-    if (!customURL) {return res.status(404).json({ success: false, message: "No custom URL set yet" })}
+    if (!customURL) { return res.status(404).json({ success: false, message: "No custom URL set yet" }) }
     // Fetch logo separately
     const logo = await LogoImage.findOne({ user: req.user._id });
     res.json({
