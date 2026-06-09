@@ -10,24 +10,20 @@ import Qr from '../admin/AdminQr/models/qrSchema.js';
 
 const router = express.Router();
 
-
 router.get("/get-url/:qrId", async (req, res) => {
   const { qrId } = req.params;
   try {
     // 1️ First check: User assigned QR (QrImage)
     const qr = await QrImage.findOne({ randomId: qrId });
-
     if (qr) {
       //  Check subscription
       const today = new Date();
-
       const activeSubscription = await Payment.findOne({
         userId: qr.user,
         type: "subscription",
         status: "active",
         currentEnd: { $gt: today },
       });
-
       if (!activeSubscription) {
         return res.json({
           success: true,
@@ -90,7 +86,6 @@ router.get("/get-url/:qrId", async (req, res) => {
         imageUrl: adminQr.imageUrl || null,
       },
     });
-
   } catch (err) {
     console.error("Error fetching custom URL:", err);
     res.status(500).json({
@@ -134,7 +129,6 @@ router.post("/set-url", authMiddleware, async (req, res) => {
         redirectFromRating: redirectFromRating ?? 3,
       });
     }
-
     res.json({
       success: true,
       message: "Custom URL & redirect setting saved successfully",
@@ -180,9 +174,7 @@ router.put("/update-url", authMiddleware, async (req, res) => {
     if (redirectFromRating !== undefined) {
       customURL.redirectFromRating = redirectFromRating;
     }
-
     await customURL.save();
-
     res.json({
       success: true,
       message: "Custom URL, Company Name & Redirect setting updated",
@@ -212,16 +204,9 @@ router.delete("/delete-url", authMiddleware, async (req, res) => {
 router.get("/get-url", authMiddleware, async (req, res) => {
   try {
     const customURL = await CustomURL.findOne({ user: req.user._id });
-
-    if (!customURL) {
-      return res
-        .status(404)
-        .json({ success: false, message: "No custom URL set yet" });
-    }
-
+    if (!customURL) {return res.status(404).json({ success: false, message: "No custom URL set yet" })}
     // Fetch logo separately
     const logo = await LogoImage.findOne({ user: req.user._id });
-
     res.json({
       success: true,
       data: {
@@ -282,6 +267,7 @@ router.post("/increase-rating/:qrId", async (req, res) => {
     });
   }
 });
+
 router.get("/analytics", authMiddleware, async (req, res) => {
   try {
     const customURL = await CustomURL.findOne({
@@ -323,5 +309,5 @@ router.get("/analytics", authMiddleware, async (req, res) => {
     });
   }
 });
-export default router;
 
+export default router;

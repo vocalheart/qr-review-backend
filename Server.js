@@ -39,196 +39,387 @@ app.use(cors({
 
 /* ======================================================
    RAZORPAY WEBHOOK (RAW BODY – MANDATORY)
-   ====================================================== */
-app.post("/api/subscription-webhook", express.raw({ type: "*/*" }), async (req, res) => {
-  try {
-    const razorpaySignature = req.headers["x-razorpay-signature"];
-    const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
-    const body = req.body.toString();
+====================================================== */
 
-    const expectedSignature = crypto
-      .createHmac("sha256", webhookSecret)
-      .update(body)
-      .digest("hex");
+app.post("/api/subscription-webhook",express.raw({ type: "*/*" }),async (req, res) => {
+    try {
+      const razorpaySignature =req.headers["x-razorpay-signature"];
+      const webhookSecret =process.env.RAZORPAY_WEBHOOK_SECRET;
+      const body = req.body.toString();
+      /* ============================================
+         VERIFY SIGNATURE
+      ============================================ */
+      const expectedSignature = crypto.createHmac("sha256", webhookSecret).update(body).digest("hex");
+      if (razorpaySignature !== expectedSignature) {
+        console.log("Webhook signature mismatch");
+        return res.status(400).json({
+          success: false,
+          message: "Invalid signature",
+        });
+      }
 
-    if (razorpaySignature !== expectedSignature) {
-      console.log(" Webhook signature mismatch");
-      return res.status(400).json({ success: false });
+      /* ============================================
+         PARSE EVENT
+      ============================================ */
+      const event = JSON.parse(body);
+      console.log("WEBHOOK EVENT:", event.event);
+      const { payload } = event;
+      /* ============================================
+         EVENTS
+      ============================================ */
+      switch (event.event) {
+        /* ========================================
+           PAYMENT CAPTURED
+        ======================================== */
+        case "payment.captured":
+          await handlePaymentCaptured(
+            payload.payment.entity
+          );
+          break;
+        /* ========================================
+           PAYMENT AUTHORIZED
+        ======================================== */
+        case "payment.authorized":
+          console.log("Payment Authorized:",payload.payment.entity.id);
+          break;
+        /* ========================================
+           PAYMENT FAILED
+        ======================================== */
+        case "payment.failed":
+          await handlePaymentFailed(
+            payload.payment.entity
+          );
+          break;
+        /* ========================================
+           SUBSCRIPTION ACTIVATED
+        ======================================= */
+        case "subscription.activated":
+          await handleSubscriptionActivated(
+            payload.subscription.entity
+          );
+          break;
+        /* ========================================
+           SUBSCRIPTION CHARGED
+        ======================================== */
+
+        case "subscription.charged":
+          await handleSubscriptionCharged(
+            payload.payment.entity,
+            payload.subscription.entity
+          );
+          break;
+        /* ========================================
+           SUBSCRIPTION COMPLETED
+        ======================================== */
+        case "subscription.completed":
+          await handleSubscriptionCompleted(
+            payload.subscription.entity
+          );
+          break;
+        /* ========================================
+           SUBSCRIPTION CANCELLED
+        ======================================== */
+        case "subscription.cancelled":
+          await handleSubscriptionCancelled(
+            payload.subscription.entity
+          );
+
+          break;
+
+        /* ========================================
+           DEFAULT
+        ======================================== */
+
+        default:
+
+          console.log(
+            "Unhandled event:",
+            event.event
+          );
+      }
+
+      return res.json({
+        success: true,
+      });
+
+    } catch (err) {
+
+      console.error(
+        "Webhook error:",
+        err
+      );
+
+      return res.status(500).json({
+        success: false,
+      });
     }
-
-    const event = JSON.parse(body);
-    console.log("WEBHOOK EVENT:", event.event);
-
-    const { payload } = event;
-
-    switch (event.event) {
-
-      // ── Payment successfully captured ──
-      case "payment.captured":
-        await handlePaymentCaptured(payload.payment.entity);
-        break;
-
-      case "payment.authorized":
-        console.log("Payment authorized:", payload.payment.entity.id);
-        break;
-
-      // ── Subscription activated (dates come here) ──
-      case "subscription.activated":
-        await handleSubscriptionActivated(payload.subscription.entity);
-        break;
-      // ── Recurring charge success ──
-      case "subscription.charged":
-        await handleSubscriptionCharged(
-          payload.payment.entity,
-          payload.subscription.entity
-        );
-        break;
-      // ── Cycle completed – keep active till currentEnd ──
-      case "subscription.completed":
-        console.log("Subscription cycle completed");
-        await handleSubscriptionCompleted(payload.subscription.entity);
-        break;
-      case "subscription.cancelled":
-        await handleSubscriptionCancelled(payload.subscription.entity);
-        break;
-      default:
-        console.log("Unhandled event:", event.event);
-    }
-    return res.json({ success: true });
-  } catch (err) {
-    console.error("Webhook error:", err);
-    return res.status(500).json({ success: false });
   }
-});
+);
 
-/* ===============================================================
+/* ======================================================
    HANDLERS
-   =============================================================== */
+====================================================== */
 
-/**
- * payment.captured
- * – Payment done. If subscription dates not set yet (activated
- *   event may come after), fetch them from Razorpay directly.
- */
+/* ======================================================
+   PAYMENT CAPTURED
+====================================================== */
+
 async function handlePaymentCaptured(payment) {
-  console.log(" Payment Captured:", payment.id, "| sub:", payment.subscription_id);
+
+  console.log(
+    "Payment Captured:",
+    payment.id,
+    "| sub:",
+    payment.subscription_id
+  );
 
   if (!payment.subscription_id) {
-    console.log("No subscription_id in payment – skipping");
+
+    console.log(
+      "No subscription_id found"
+    );
+
     return;
   }
 
-  // Base update
   const updateFields = {
+
     status: "active",
+
     paymentId: payment.id,
   };
 
-  // Fetch subscription from Razorpay to get dates (in case
-  // subscription.activated fires after payment.captured)
   try {
-    const sub = await razorpay.subscriptions.fetch(payment.subscription_id);
+
+    const sub =
+      await razorpay.subscriptions.fetch(
+        payment.subscription_id
+      );
+
     if (sub.current_start) {
-      updateFields.currentStart = new Date(sub.current_start * 1000);
+
+      updateFields.currentStart =
+        new Date(
+          sub.current_start * 1000
+        );
     }
+
     if (sub.current_end) {
-      updateFields.currentEnd = new Date(sub.current_end * 1000);
+
+      updateFields.currentEnd =
+        new Date(
+          sub.current_end * 1000
+        );
     }
+
     if (sub.charge_at) {
-      updateFields.nextChargeAt = new Date(sub.charge_at * 1000);
+
+      updateFields.nextChargeAt =
+        new Date(
+          sub.charge_at * 1000
+        );
     }
-    console.log(" Dates from Razorpay:", updateFields.currentStart, "→", updateFields.currentEnd);
+
+    console.log(
+      "Dates:",
+      updateFields.currentStart,
+      "→",
+      updateFields.currentEnd
+    );
+
   } catch (err) {
-    console.error("Could not fetch subscription dates:", err.message);
+
+    console.error(
+      "Fetch subscription error:",
+      err.message
+    );
   }
 
   await Payment.updateOne(
-    { subscriptionId: payment.subscription_id },
+    {
+      subscriptionId:
+        payment.subscription_id,
+    },
     updateFields
   );
 }
 
-/**
- * subscription.activated
- * – Subscription is live. Always has reliable current_start / current_end.
- */
-async function handleSubscriptionActivated(subscription) {
-  console.log(" Subscription Activated:", subscription.id);
+/* ======================================================
+   PAYMENT FAILED
+====================================================== */
+
+async function handlePaymentFailed(payment) {
+
+  console.log("Payment Failed:",payment.id);
+  await Payment.updateOne(
+    {
+      subscriptionId:
+        payment.subscription_id,
+    },
+    {
+      status: "failed",
+
+      failedAt: new Date(),
+    }
+  );
+}
+
+/* ======================================================
+   SUBSCRIPTION ACTIVATED
+====================================================== */
+
+async function handleSubscriptionActivated(
+  subscription
+) {
+
+  console.log(
+    "Subscription Activated:",
+    subscription.id
+  );
 
   const updateFields = {
+
     status: "active",
   };
 
   if (subscription.current_start) {
-    updateFields.currentStart = new Date(subscription.current_start * 1000);
-  }
-  if (subscription.current_end) {
-    updateFields.currentEnd = new Date(subscription.current_end * 1000);
-  }
-  if (subscription.charge_at) {
-    updateFields.nextChargeAt = new Date(subscription.charge_at * 1000);
+
+    updateFields.currentStart =
+      new Date(
+        subscription.current_start * 1000
+      );
   }
 
-  console.log("Activated dates:", updateFields.currentStart, "→", updateFields.currentEnd);
+  if (subscription.current_end) {
+
+    updateFields.currentEnd =
+      new Date(
+        subscription.current_end * 1000
+      );
+  }
+
+  if (subscription.charge_at) {
+
+    updateFields.nextChargeAt =
+      new Date(
+        subscription.charge_at * 1000
+      );
+  }
+
+  console.log(
+    "Activated dates:",
+    updateFields.currentStart,
+    "→",
+    updateFields.currentEnd
+  );
 
   await Payment.updateOne(
-    { subscriptionId: subscription.id },
+    {
+      subscriptionId: subscription.id,
+    },
     updateFields
   );
 }
 
-/**
- * subscription.charged
- * – Renewal payment. Update dates for new billing cycle.
- */
-async function handleSubscriptionCharged(payment, subscription) {
-  console.log(" Subscription Charged:", payment.id);
+/* ======================================================
+   SUBSCRIPTION CHARGED
+====================================================== */
+
+async function handleSubscriptionCharged(
+  payment,
+  subscription
+) {
+
+  console.log(
+    "Subscription Charged:",
+    payment.id
+  );
 
   const updateFields = {
+
     paymentId: payment.id,
+
     status: "active",
   };
 
   if (subscription?.current_start) {
-    updateFields.currentStart = new Date(subscription.current_start * 1000);
+
+    updateFields.currentStart =
+      new Date(
+        subscription.current_start * 1000
+      );
   }
+
   if (subscription?.current_end) {
-    updateFields.currentEnd = new Date(subscription.current_end * 1000);
+
+    updateFields.currentEnd =
+      new Date(
+        subscription.current_end * 1000
+      );
   }
+
   if (subscription?.charge_at) {
-    updateFields.nextChargeAt = new Date(subscription.charge_at * 1000);
+
+    updateFields.nextChargeAt =
+      new Date(
+        subscription.charge_at * 1000
+      );
   }
 
   await Payment.updateOne(
-    { subscriptionId: payment.subscription_id },
+    {
+      subscriptionId:
+        payment.subscription_id,
+    },
     updateFields
   );
 }
 
-/**
- * subscription.completed
- * – All billing cycles done. Keep active until currentEnd expires.
- * – Do NOT change currentEnd here — let the existing date stand.
- */
-async function handleSubscriptionCompleted(subscription) {
-  console.log("Subscription Completed:", subscription.id);
+/* ======================================================
+   SUBSCRIPTION COMPLETED
+====================================================== */
+
+async function handleSubscriptionCompleted(
+  subscription
+) {
+
+  console.log(
+    "Subscription Completed:",
+    subscription.id
+  );
 
   await Payment.updateOne(
-    { subscriptionId: subscription.id },
-    { status: "active" } // keep active until currentEnd
+    {
+      subscriptionId: subscription.id,
+    },
+    {
+      status: "completed",
+    }
   );
 }
 
-/**
- * subscription.cancelled
- * – User or admin cancelled.
- */
-async function handleSubscriptionCancelled(subscription) {
-  console.log("Subscription Cancelled:", subscription.id);
+/* ======================================================
+   SUBSCRIPTION CANCELLED
+====================================================== */
+
+async function handleSubscriptionCancelled(
+  subscription
+) {
+
+  console.log(
+    "Subscription Cancelled:",
+    subscription.id
+  );
 
   await Payment.updateOne(
-    { subscriptionId: subscription.id },
-    { status: "cancelled"}
+    {
+      subscriptionId: subscription.id,
+    },
+    {
+      status: "cancelled",
+
+      cancelledAt: new Date(),
+    }
   );
 }
 

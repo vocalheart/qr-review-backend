@@ -1,3 +1,4 @@
+
 import mongoose from "mongoose";
 
 const paymentSchema = new mongoose.Schema(
@@ -8,19 +9,53 @@ const paymentSchema = new mongoose.Schema(
       required: true,
     },
 
-    // ===== ONE-TIME PAYMENT =====
-    orderId: String,
-    paymentId: String,
-    signature: String,
+    /* =========================================
+       ONE TIME PAYMENT
+    ========================================= */
 
-    // ===== SUBSCRIPTION =====
-    subscriptionId: String,
-    planId: String,
+    orderId: {
+      type: String,
+      default: null,
+    },
+
+    paymentId: {
+      type: String,
+      default: null,
+    },
+
+    signature: {
+      type: String,
+      default: null,
+    },
+
+    /* =========================================
+       SUBSCRIPTION
+    ========================================= */
+
+    subscriptionId: {
+      type: String,
+      default: null,
+    },
+
+    planId: {
+      type: String,
+      default: null,
+    },
+
     planType: {
       type: String,
       enum: ["monthly", "quarterly", "yearly"],
+      default: null,
     },
-    shortUrl: String,
+
+    shortUrl: {
+      type: String,
+      default: null,
+    },
+
+    /* =========================================
+       PAYMENT INFO
+    ========================================= */
 
     amount: {
       type: Number, // paise
@@ -38,18 +73,87 @@ const paymentSchema = new mongoose.Schema(
       required: true,
     },
 
+    /* =========================================
+       STATUS
+    ========================================= */
+
     status: {
       type: String,
-      enum: ["created", "paid", "active", "cancelled", "failed"],
+
+      enum: [
+        "created",
+        "authenticated",
+        "active",
+        "paid",
+        "halted",
+        "cancelled",
+        "completed",
+        "failed",
+        "expired",
+      ],
+
       default: "created",
     },
 
-    currentStart: Date,
-    currentEnd: Date,
-    nextChargeAt: Date,
+    /* =========================================
+       SUBSCRIPTION DATES
+    ========================================= */
+
+    currentStart: {
+      type: Date,
+      default: null,
+    },
+
+    currentEnd: {
+      type: Date,
+      default: null,
+    },
+
+    nextChargeAt: {
+      type: Date,
+      default: null,
+    },
+
+    trialStart: {
+      type: Date,
+      default: null,
+    },
+
+    trialEnd: {
+      type: Date,
+      default: null,
+    },
+
+    cancelledAt: {
+      type: Date,
+      default: null,
+    },
+
+    failedAt: {
+      type: Date,
+      default: null,
+    },
+
+    /* =========================================
+       EXTRA
+    ========================================= */
+
+    notes: {
+      type: Object,
+      default: {},
+    },
+
+    razorpayCustomerId: {
+      type: String,
+      default: null,
+    },
   },
-  { timestamps: true }
+
+  {
+    timestamps: true,
+  }
 );
 
 const Payment = mongoose.model("Payment", paymentSchema);
+
 export default Payment;
