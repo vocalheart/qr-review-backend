@@ -244,7 +244,7 @@ router.post("/create-subscription", authMiddleware, async (req, res) => {
 
         customer_notify: 1,
 
-        total_count: 999,
+        total_count: 100,
 
         start_at: trialEnd,
 
