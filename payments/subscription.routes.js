@@ -272,8 +272,7 @@ router.post("/create-subscription", authMiddleware, async (req, res) => {
 
       type: "subscription",
 
-      status: "created",
-
+      status: "authenticated",
       amount,
 
       currency: "INR",
