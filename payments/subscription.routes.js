@@ -97,208 +97,244 @@ router.get("/admin/get-plans", authMiddleware, async (req, res) => {
    USER – CREATE SUBSCRIPTION
 ====================================================== */
 
-router.post("/create-subscription", authMiddleware, async (req, res) => {
-  try {
+router.post(
+  "/create-subscription",
+  authMiddleware,
+  async (req, res) => {
+    try {
 
-    const { planType } = req.body;
+      const { planType } = req.body;
 
-    let planId;
-    let amount;
+      let planId;
+      let amount;
 
-    /* ============================================
-       PLAN SELECT
-    ============================================ */
+      /* ============================================
+         PLAN SELECT
+      ============================================ */
 
-    if (planType === "monthly") {
+      if (planType === "monthly") {
 
-      planId = process.env.RAZORPAY_MONTHLY_PLAN_ID;
-      amount = 64900;
+        planId = process.env.RAZORPAY_MONTHLY_PLAN_ID;
+        amount = 64900;
 
-    } else if (planType === "quarterly") {
+      } else if (planType === "quarterly") {
 
-      planId = process.env.RAZORPAY_3MONTH_PLAN_ID;
-      amount = 249900;
+        planId = process.env.RAZORPAY_3MONTH_PLAN_ID;
+        amount = 249900;
 
-    } else if (planType === "yearly") {
+      } else if (planType === "yearly") {
 
-      planId = process.env.RAZORPAY_YEARLY_PLAN_ID;
-      amount = 699900;
+        planId = process.env.RAZORPAY_YEARLY_PLAN_ID;
+        amount = 699900;
 
-    } else {
+      } else {
 
-      return res.status(400).json({
-        success: false,
-        message: "Invalid plan type",
-      });
-    }
-
-    /* ============================================
-       ACTIVE SUBSCRIPTION CHECK
-    ============================================ */
-
-    const activeSubscription = await Payment.findOne({
-      userId: req.user._id,
-      type: "subscription",
-      status: "active",
-    });
-
-    // VALID ACTIVE SUBSCRIPTION
-    if (
-      activeSubscription &&
-      activeSubscription.currentEnd &&
-      new Date(activeSubscription.currentEnd) > new Date()
-    ) {
-
-      return res.status(400).json({
-        success: false,
-        message: "You already have an active subscription",
-      });
-    }
-
-    // EXPIRED SUBSCRIPTION
-    if (
-      activeSubscription &&
-      activeSubscription.currentEnd &&
-      new Date(activeSubscription.currentEnd) <= new Date()
-    ) {
-
-      await Payment.updateOne(
-        { _id: activeSubscription._id },
-        {
-          status: "expired",
-        }
-      );
-    }
-
-    /* ============================================
-       PENDING SUBSCRIPTION CHECK
-    ============================================ */
-
-    const existing = await Payment.findOne({
-      userId: req.user._id,
-      type: "subscription",
-      status: "created",
-    });
-
-    if (existing) {
-
-      const timeDiff =
-        Date.now() - existing.createdAt.getTime();
-
-      // REUSE EXISTING LINK WITHIN 5 MINUTES
-      if (timeDiff < 5 * 60 * 1000) {
-
-        return res.json({
-          success: true,
-          subscription: {
-            short_url: existing.shortUrl,
-            status: "pending",
-          },
+        return res.status(400).json({
+          success: false,
+          message: "Invalid plan type",
         });
       }
 
-      // CANCEL OLD PENDING SUBSCRIPTION
-      if (existing.subscriptionId) {
+      /* ============================================
+         CHECK ACTIVE / TRIAL SUBSCRIPTION
+      ============================================ */
 
-        try {
+      const today = new Date();
 
-          await razorpay.subscriptions.cancel(
-            existing.subscriptionId
-          );
+      const activeSubscription = await Payment.findOne({
+        userId: req.user._id,
+        type: "subscription",
 
-        } catch (err) {
-
-          console.log(
-            "Cancel subscription error:",
-            err.message
-          );
-        }
-      }
-
-      // MARK FAILED
-      await Payment.updateOne(
-        { _id: existing._id },
-        {
-          status: "failed",
-          failedAt: new Date(),
-        }
-      );
-    }
-
-    /* ============================================
-       7 DAYS FREE TRIAL
-    ============================================ */
-
-    const trialEnd =
-      Math.floor(Date.now() / 1000) +
-      (7 * 24 * 60 * 60);
-
-    /* ============================================
-       CREATE RAZORPAY SUBSCRIPTION
-    ============================================ */
-
-    const subscription =
-      await razorpay.subscriptions.create({
-
-        plan_id: planId,
-
-        customer_notify: 1,
-
-        total_count: 100,
-
-        start_at: trialEnd,
-
-        notify_info: {
-          notify_phone: true,
-          notify_email: true,
+        status: {
+          $in: ["active", "authenticated"],
         },
+
+        $or: [
+          {
+            currentEnd: { $gt: today },
+          },
+          {
+            trialEnd: { $gt: today },
+          },
+        ],
       });
 
-    /* ============================================
-       SAVE PAYMENT
-    ============================================ */
+      // BLOCK IF ALREADY ACTIVE
+      if (activeSubscription) {
 
-    await Payment.create({
+        return res.status(400).json({
+          success: false,
+          message:
+            "You already have an active subscription",
+        });
+      }
 
-      userId: req.user._id,
+      /* ============================================
+         AUTO MARK EXPIRED SUBSCRIPTIONS
+      ============================================ */
 
-      subscriptionId: subscription.id,
+      await Payment.updateMany(
+        {
+          userId: req.user._id,
+          type: "subscription",
 
-      planId: planId,
+          status: {
+            $in: ["active", "authenticated"],
+          },
 
-      planType: planType,
+          $or: [
+            {
+              currentEnd: { $lte: today },
+            },
+            {
+              trialEnd: { $lte: today },
+            },
+          ],
+        },
 
-      shortUrl: subscription.short_url,
+        {
+          $set: {
+            status: "expired",
+          },
+        }
+      );
 
-      type: "subscription",
+      /* ============================================
+         PENDING SUBSCRIPTION CHECK
+      ============================================ */
 
-      status: "authenticated",
-      amount,
+      const existing = await Payment.findOne({
+        userId: req.user._id,
+        type: "subscription",
+        status: "created",
+      });
 
-      currency: "INR",
+      if (existing) {
 
-      trialStart: new Date(),
+        const timeDiff =
+          Date.now() - existing.createdAt.getTime();
 
-      trialEnd: new Date(
-        Date.now() + 7 * 24 * 60 * 60 * 1000
-      ),
-    });
+        // REUSE LINK WITHIN 5 MINUTES
+        if (timeDiff < 5 * 60 * 1000) {
 
-    res.json({
-      success: true,
-      subscription,
-    });
+          return res.json({
+            success: true,
 
-  } catch (error) {
+            subscription: {
+              short_url: existing.shortUrl,
+              status: "pending",
+            },
+          });
+        }
 
-    console.log("SUBSCRIPTION ERROR:", error);
+        // CANCEL OLD SUBSCRIPTION
+        if (existing.subscriptionId) {
 
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+          try {
+
+            await razorpay.subscriptions.cancel(
+              existing.subscriptionId
+            );
+
+          } catch (err) {
+
+            console.log(
+              "Cancel subscription error:",
+              err.message
+            );
+          }
+        }
+
+        // MARK FAILED
+        await Payment.updateOne(
+          { _id: existing._id },
+
+          {
+            status: "failed",
+            failedAt: new Date(),
+          }
+        );
+      }
+
+      /* ============================================
+         7 DAYS FREE TRIAL
+      ============================================ */
+
+      const trialEndUnix =
+        Math.floor(Date.now() / 1000) +
+        7 * 24 * 60 * 60;
+
+      /* ============================================
+         CREATE SUBSCRIPTION
+      ============================================ */
+
+      const subscription =
+        await razorpay.subscriptions.create({
+
+          plan_id: planId,
+
+          customer_notify: 1,
+
+          total_count: 100,
+
+          start_at: trialEndUnix,
+
+          notify_info: {
+            notify_phone: true,
+            notify_email: true,
+          },
+        });
+
+      /* ============================================
+         SAVE PAYMENT
+      ============================================ */
+
+      await Payment.create({
+
+        userId: req.user._id,
+
+        subscriptionId: subscription.id,
+
+        planId: planId,
+
+        planType: planType,
+
+        shortUrl: subscription.short_url,
+
+        type: "subscription",
+
+        status: "authenticated",
+
+        amount,
+
+        currency: "INR",
+
+        trialStart: new Date(),
+
+        trialEnd: new Date(
+          Date.now() + 7 * 24 * 60 * 60 * 1000
+        ),
+      });
+
+      return res.json({
+        success: true,
+        subscription,
+      });
+
+    } catch (error) {
+
+      console.log(
+        "SUBSCRIPTION ERROR:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message: error.message,
+      });
+    }
   }
-});
+);
 
 /* ======================================================
    USER – SUBSCRIPTION STATUS
