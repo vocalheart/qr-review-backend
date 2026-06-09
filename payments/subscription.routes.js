@@ -340,128 +340,176 @@ router.post(
    USER – SUBSCRIPTION STATUS
 ====================================================== */
 
-router.get("/subscription-status", authMiddleware, async (req, res) => {
-  try {
+router.get("/subscription-status",authMiddleware,async (req, res) => {
+    try {
+      const sub = await Payment.findOne({
+        userId: req.user._id,
+        type: "subscription",
+      }).sort({ createdAt: -1 });
 
-    const sub = await Payment.findOne({
-      userId: req.user._id,
-      type: "subscription",
-    }).sort({ createdAt: -1 });
+      if (!sub) {
 
-    if (!sub) {
+        return res.json({
+          success: true,
+          status: "none",
+        });
+      }
 
-      return res.json({
-        success: true,
-        status: "none",
-      });
-    }
+      const now = new Date();
 
-    // AUTO EXPIRE CHECK
-    if (
-      sub.status === "active" &&
-      sub.currentEnd &&
-      new Date(sub.currentEnd) <= new Date()
-    ) {
+      /* ============================================
+         AUTO EXPIRE CHECK
+      ============================================ */
 
-      sub.status = "expired";
+      // ACTIVE EXPIRE
+      if (
+        sub.status === "active" &&
+        sub.currentEnd &&
+        new Date(sub.currentEnd) <= now
+      ) {
 
-      await sub.save();
-    }
+        sub.status = "expired";
 
-    let daysRemaining = 0;
-    let hoursRemaining = 0;
+        await sub.save();
+      }
 
-    if (
-      (sub.status === "active" ||
-        sub.status === "authenticated") &&
-      sub.currentEnd
-    ) {
+      // TRIAL EXPIRE
+      if (
+        sub.status === "authenticated" &&
+        sub.trialEnd &&
+        new Date(sub.trialEnd) <= now
+      ) {
 
-      const diff =
-        new Date(sub.currentEnd) - new Date();
+        sub.status = "expired";
 
-      if (diff > 0) {
+        await sub.save();
+      }
 
-        daysRemaining = Math.floor(
-          diff / (1000 * 60 * 60 * 24)
-        );
+      /* ============================================
+         REMAINING TIME
+      ============================================ */
 
-        hoursRemaining = Math.floor(
-          (
-            diff %
-            (1000 * 60 * 60 * 24)
-          ) /
-          (1000 * 60 * 60)
+      let daysRemaining = 0;
+      let hoursRemaining = 0;
+
+      let expiryDate = null;
+
+      // TRIAL USER
+      if (
+        sub.status === "authenticated" &&
+        sub.trialEnd
+      ) {
+
+        expiryDate = new Date(
+          sub.trialEnd
         );
       }
-    }
 
-    /* ============================================
-       PLAN MAP
-    ============================================ */
+      // ACTIVE USER
+      if (
+        sub.status === "active" &&
+        sub.currentEnd
+      ) {
 
-    const planMap = {
+        expiryDate = new Date(
+          sub.currentEnd
+        );
+      }
 
-      [process.env.RAZORPAY_MONTHLY_PLAN_ID]: {
-        label: "Monthly Plan",
-        price: "₹649",
-      },
+      if (expiryDate) {
 
-      [process.env.RAZORPAY_3MONTH_PLAN_ID]: {
-        label: "3 Months Plan",
-        price: "₹2499",
-      },
+        const diff =
+          expiryDate - now;
 
-      [process.env.RAZORPAY_YEARLY_PLAN_ID]: {
-        label: "1 Year Plan",
-        price: "₹6999",
-      },
-    };
+        if (diff > 0) {
 
-    const planInfo =
-      planMap[sub.planId] || {
-        label: "Premium Plan",
-        price: "",
+          daysRemaining = Math.floor(
+            diff /
+            (1000 * 60 * 60 * 24)
+          );
+
+          hoursRemaining = Math.floor(
+            (
+              diff %
+              (1000 * 60 * 60 * 24)
+            ) /
+            (1000 * 60 * 60)
+          );
+        }
+      }
+
+      /* ============================================
+         PLAN MAP
+      ============================================ */
+
+      const planMap = {
+
+        [process.env.RAZORPAY_MONTHLY_PLAN_ID]: {
+          label: "Monthly Plan",
+          price: "₹649",
+        },
+
+        [process.env.RAZORPAY_3MONTH_PLAN_ID]: {
+          label: "3 Months Plan",
+          price: "₹2499",
+        },
+
+        [process.env.RAZORPAY_YEARLY_PLAN_ID]: {
+          label: "1 Year Plan",
+          price: "₹6999",
+        },
       };
 
-    res.json({
+      const planInfo =
+        planMap[sub.planId] || {
+          label: "Premium Plan",
+          price: "",
+        };
 
-      success: true,
+      return res.json({
 
-      status: sub.status,
+        success: true,
 
-      planId: sub.planId,
+        status: sub.status,
 
-      planType: sub.planType || null,
+        planId: sub.planId,
 
-      planLabel: planInfo.label,
+        planType: sub.planType || null,
 
-      planPrice: planInfo.price,
+        planLabel: planInfo.label,
 
-      daysRemaining,
+        planPrice: planInfo.price,
 
-      hoursRemaining,
+        daysRemaining,
 
-      currentStart: sub.currentStart || null,
+        hoursRemaining,
 
-      currentEnd: sub.currentEnd || null,
+        currentStart:
+          sub.currentStart || null,
 
-      nextChargeAt: sub.nextChargeAt || null,
+        currentEnd:
+          sub.currentEnd || null,
 
-      trialStart: sub.trialStart || null,
+        nextChargeAt:
+          sub.nextChargeAt || null,
 
-      trialEnd: sub.trialEnd || null,
-    });
+        trialStart:
+          sub.trialStart || null,
 
-  } catch (error) {
+        trialEnd:
+          sub.trialEnd || null,
+      });
 
-    console.log(error);
+    } catch (error) {
 
-    res.status(500).json({
-      success: false,
-    });
+      console.log(error);
+
+      return res.status(500).json({
+        success: false,
+      });
+    }
   }
-});
+);
 
 /* ======================================================
    USER – SUBSCRIPTION HISTORY
