@@ -96,7 +96,6 @@ router.get("/admin/get-plans", authMiddleware, async (req, res) => {
 /* ======================================================
    USER – CREATE SUBSCRIPTION
 ====================================================== */
-
 router.post(
   "/create-subscription",
   authMiddleware,
@@ -120,18 +119,14 @@ router.post(
 
         amount = 119900;
 
-      } else if (
-        planType === "quarterly"
-      ) {
+      } else if (planType === "quarterly") {
 
         planId =
           process.env.RAZORPAY_3MONTH_PLAN_ID;
 
         amount = 299900;
 
-      } else if (
-        planType === "yearly"
-      ) {
+      } else if (planType === "yearly") {
 
         planId =
           process.env.RAZORPAY_YEARLY_PLAN_ID;
@@ -184,7 +179,7 @@ router.post(
           ],
         });
 
-      // BLOCK IF ACTIVE
+      // BLOCK IF ALREADY ACTIVE
       if (activeSubscription) {
 
         return res.status(400).json({
@@ -259,7 +254,7 @@ router.post(
           Date.now() -
           existing.createdAt.getTime();
 
-        // REUSE EXISTING LINK
+        // REUSE SAME LINK FOR 5 MIN
         if (
           timeDiff <
           5 * 60 * 1000
@@ -279,7 +274,10 @@ router.post(
           });
         }
 
-        // CANCEL OLD SUBSCRIPTION
+        /* ============================================
+           CANCEL OLD SUBSCRIPTION
+        ============================================ */
+
         if (
           existing.subscriptionId
         ) {
@@ -301,7 +299,10 @@ router.post(
           }
         }
 
-        // MARK FAILED
+        /* ============================================
+           MARK FAILED
+        ============================================ */
+
         await Payment.updateOne(
 
           {
@@ -318,7 +319,7 @@ router.post(
       }
 
       /* ============================================
-         CHECK TRIAL ALREADY USED
+         CHECK TRIAL USED
       ============================================ */
 
       const alreadyUsedTrial =
@@ -333,7 +334,7 @@ router.post(
 
       /* ============================================
          FIRST TIME USER
-         → 7 DAYS FREE TRIAL
+         → FREE TRIAL
       ============================================ */
 
       if (!alreadyUsedTrial) {
@@ -349,19 +350,12 @@ router.post(
 
               total_count: 100,
 
-              // FIRST PAYMENT AFTER 7 DAYS
+              // FIRST AUTO DEBIT AFTER 7 DAYS
               start_at:
                 Math.floor(
                   Date.now() / 1000
                 ) +
                 (7 * 24 * 60 * 60),
-
-              // PAYMENT PAGE EXPIRE
-              expire_by:
-                Math.floor(
-                  Date.now() / 1000
-                ) +
-                (15 * 60),
 
               notify_info: {
 
@@ -369,11 +363,18 @@ router.post(
 
                 notify_email: true,
               },
+
+              notes: {
+
+                userId:
+                  req.user._id.toString(),
+
+                trial: "true",
+              },
             });
 
         /* ============================================
-           SAVE SUBSCRIPTION
-           TRIAL STARTS AFTER WEBHOOK
+           SAVE TRIAL SUBSCRIPTION
         ============================================ */
 
         await Payment.create({
@@ -392,19 +393,20 @@ router.post(
 
           type: "subscription",
 
-          // ACTIVE AFTER AUTHENTICATION
           status: "created",
 
           amount,
 
           currency: "INR",
+
+          // VERY IMPORTANT
+          trialUsed: true,
         });
 
       } else {
 
         /* ============================================
-           USER ALREADY USED TRIAL
-           → DIRECT PAID SUBSCRIPTION
+           DIRECT PAID SUBSCRIPTION
         ============================================ */
 
         subscription =
@@ -418,6 +420,7 @@ router.post(
 
               total_count: 100,
 
+              // PAYMENT LINK EXPIRE IN 15 MIN
               expire_by:
                 Math.floor(
                   Date.now() / 1000
@@ -430,10 +433,18 @@ router.post(
 
                 notify_email: true,
               },
+
+              notes: {
+
+                userId:
+                  req.user._id.toString(),
+
+                trial: "false",
+              },
             });
 
         /* ============================================
-           SAVE NORMAL SUBSCRIPTION
+           SAVE PAID SUBSCRIPTION
         ============================================ */
 
         await Payment.create({
@@ -457,6 +468,8 @@ router.post(
           amount,
 
           currency: "INR",
+
+          trialUsed: true,
         });
       }
 
@@ -483,8 +496,6 @@ router.post(
     }
   }
 );
-
-
 
 /* ======================================================
    USER – SUBSCRIPTION STATUS
