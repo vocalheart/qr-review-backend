@@ -208,7 +208,25 @@ router.post("/create-subscription", authMiddleware, async (req, res) => {
 
     if (!alreadyUsedTrial) {
 
-      const trialStartAt = Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60);
+      // Razorpay valid Unix timestamp range: 946684800 (year 2000) → 4765046400 (year 2121)
+      // Use server time (Date.now()), never trust client time
+      const RAZORPAY_MIN_TS = 946684800;
+      const RAZORPAY_MAX_TS = 4765046400;
+      const SEVEN_DAYS_SECONDS = 7 * 24 * 60 * 60;
+
+      const nowSeconds   = Math.floor(Date.now() / 1000);
+      const trialStartAt = nowSeconds + SEVEN_DAYS_SECONDS;
+
+      // Safety guard — should never happen on server but log if it does
+      if (trialStartAt < RAZORPAY_MIN_TS || trialStartAt > RAZORPAY_MAX_TS) {
+        console.error("Invalid trialStartAt computed:", trialStartAt, "| nowSeconds:", nowSeconds);
+        return res.status(500).json({
+          success: false,
+          message: "Server time error. Please try again.",
+        });
+      }
+
+      console.log("Trial start_at (Unix):", trialStartAt, "| Human:", new Date(trialStartAt * 1000).toISOString());
 
       subscription = await razorpay.subscriptions.create({
         plan_id: planId,
