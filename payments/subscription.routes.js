@@ -92,9 +92,7 @@ router.get("/admin/get-plans", authMiddleware, async (req, res) => {
     });
   }
 });
-/* ======================================================
-   USER – CREATE SUBSCRIPTION
-====================================================== */
+
 /* ======================================================
    USER – CREATE SUBSCRIPTION
 ====================================================== */
@@ -335,7 +333,7 @@ router.post(
 
       /* ============================================
          FIRST TIME USER
-         → FREE TRIAL
+         → 7 DAYS FREE TRIAL
       ============================================ */
 
       if (!alreadyUsedTrial) {
@@ -351,6 +349,14 @@ router.post(
 
               total_count: 100,
 
+              // FIRST PAYMENT AFTER 7 DAYS
+              start_at:
+                Math.floor(
+                  Date.now() / 1000
+                ) +
+                (7 * 24 * 60 * 60),
+
+              // PAYMENT PAGE EXPIRE
               expire_by:
                 Math.floor(
                   Date.now() / 1000
@@ -367,6 +373,7 @@ router.post(
 
         /* ============================================
            SAVE SUBSCRIPTION
+           TRIAL STARTS AFTER WEBHOOK
         ============================================ */
 
         await Payment.create({
@@ -385,6 +392,7 @@ router.post(
 
           type: "subscription",
 
+          // ACTIVE AFTER AUTHENTICATION
           status: "created",
 
           amount,
