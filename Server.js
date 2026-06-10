@@ -15,7 +15,7 @@ import razorpay from "./config/razorpay.js";
 
 const app = express();
 
-// SABSE PEHLE CORS
+// CORS
 app.use(cors({
   origin: function (origin, callback) {
     const allowedOrigins = [
@@ -25,7 +25,6 @@ app.use(cors({
       "https://qradminpannel.vocalheart.com",
       "https://www.reviewbadhao.com",
       "https://admin.reviewbadhao.com",
-      "https://www.reviewbadhao.com"
     ];
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
@@ -39,21 +38,19 @@ app.use(cors({
 }));
 
 /* ======================================================
-   RAZORPAY WEBHOOK (RAW BODY – MANDATORY)
+   RAZORPAY WEBHOOK
+   Must use raw body — do NOT move this below express.json()
 ====================================================== */
 
-app.post("/api/subscription-webhook",
+app.post(
+  "/api/subscription-webhook",
   express.raw({ type: "*/*" }),
   async (req, res) => {
     try {
 
-      const razorpaySignature =
-        req.headers["x-razorpay-signature"];
-
-      const webhookSecret =
-        process.env.RAZORPAY_WEBHOOK_SECRET;
-
-      const body = req.body.toString();
+      const razorpaySignature = req.headers["x-razorpay-signature"];
+      const webhookSecret      = process.env.RAZORPAY_WEBHOOK_SECRET;
+      const body               = req.body.toString();
 
       /* ============================================
          VERIFY SIGNATURE
@@ -65,15 +62,8 @@ app.post("/api/subscription-webhook",
         .digest("hex");
 
       if (razorpaySignature !== expectedSignature) {
-
-        console.log(
-          "Webhook signature mismatch"
-        );
-
-        return res.status(400).json({
-          success: false,
-          message: "Invalid signature",
-        });
+        console.log("Webhook signature mismatch");
+        return res.status(400).json({ success: false, message: "Invalid signature" });
       }
 
       /* ============================================
@@ -81,551 +71,314 @@ app.post("/api/subscription-webhook",
       ============================================ */
 
       const event = JSON.parse(body);
-
-      console.log(
-        "WEBHOOK EVENT:",
-        event.event
-      );
+      console.log("WEBHOOK EVENT:", event.event);
 
       const { payload } = event;
 
       /* ============================================
-         EVENTS
+         EVENT ROUTER
       ============================================ */
 
       switch (event.event) {
 
-        /* ========================================
-           PAYMENT CAPTURED
-        ======================================== */
-
         case "payment.captured":
-
-          await handlePaymentCaptured(
-            payload.payment.entity
-          );
-
+          await handlePaymentCaptured(payload.payment.entity);
           break;
-
-        /* ========================================
-           PAYMENT AUTHORIZED
-        ======================================== */
 
         case "payment.authorized":
-
-          console.log(
-            "Payment Authorized:",
-            payload.payment.entity.id
-          );
-
+          console.log("Payment Authorized:", payload.payment.entity.id);
           break;
-
-        /* ========================================
-           PAYMENT FAILED
-        ======================================== */
 
         case "payment.failed":
-
-          await handlePaymentFailed(
-            payload.payment.entity
-          );
-
+          await handlePaymentFailed(payload.payment.entity);
           break;
-
-        /* ========================================
-           SUBSCRIPTION AUTHENTICATED
-        ======================================== */
 
         case "subscription.authenticated":
-
-          await handleSubscriptionAuthenticated(
-            payload.subscription.entity
-          );
-
+          await handleSubscriptionAuthenticated(payload.subscription.entity);
           break;
-
-        /* ========================================
-           SUBSCRIPTION ACTIVATED
-        ======================================== */
 
         case "subscription.activated":
-
-          await handleSubscriptionActivated(
-            payload.subscription.entity
-          );
-
+          await handleSubscriptionActivated(payload.subscription.entity);
           break;
-          
-case "subscription.halted":
-
-  await handleSubscriptionHalted(
-    payload.subscription.entity
-  );
-
-  break;
-
-
-        /* ========================================
-           SUBSCRIPTION CHARGED
-        ======================================== */
 
         case "subscription.charged":
-
           await handleSubscriptionCharged(
             payload.payment.entity,
             payload.subscription.entity
           );
-
           break;
 
-        /* ========================================
-           SUBSCRIPTION COMPLETED
-        ======================================== */
+        case "subscription.halted":
+          await handleSubscriptionHalted(payload.subscription.entity);
+          break;
 
         case "subscription.completed":
-
-          await handleSubscriptionCompleted(
-            payload.subscription.entity
-          );
-
+          await handleSubscriptionCompleted(payload.subscription.entity);
           break;
-
-        /* ========================================
-           SUBSCRIPTION CANCELLED
-        ======================================== */
 
         case "subscription.cancelled":
-
-          await handleSubscriptionCancelled(
-            payload.subscription.entity
-          );
-
+          await handleSubscriptionCancelled(payload.subscription.entity);
           break;
 
-        /* ========================================
-           DEFAULT
-        ======================================== */
-
         default:
-
-          console.log(
-            "Unhandled event:",
-            event.event
-          );
+          console.log("Unhandled event:", event.event);
       }
 
-      return res.json({
-        success: true,
-      });
+      return res.json({ success: true });
 
     } catch (err) {
-
-      console.error(
-        "Webhook error:",
-        err
-      );
-
-      return res.status(500).json({
-        success: false,
-      });
+      console.error("Webhook error:", err);
+      return res.status(500).json({ success: false });
     }
   }
 );
 
 /* ======================================================
-   HANDLERS
+   WEBHOOK HANDLERS
 ====================================================== */
 
 /* ======================================================
    PAYMENT CAPTURED
+   Fires when Razorpay successfully captures payment.
+   This is the main "user is now paid & active" event.
 ====================================================== */
 
 async function handlePaymentCaptured(payment) {
 
-  console.log(
-    "Payment Captured:",
-    payment.id,
-    "| sub:",
-    payment.subscription_id
-  );
+  console.log("Payment Captured:", payment.id, "| sub:", payment.subscription_id);
 
   if (!payment.subscription_id) {
-
-    console.log(
-      "No subscription_id found"
-    );
-
+    console.log("No subscription_id found — skipping");
     return;
   }
 
   const updateFields = {
-
     status: "active",
-
     paymentId: payment.id,
   };
 
   try {
 
-    const sub =
-      await razorpay.subscriptions.fetch(
-        payment.subscription_id
-      );
+    const sub = await razorpay.subscriptions.fetch(payment.subscription_id);
 
-    if (sub.current_start) {
+    if (sub.current_start) updateFields.currentStart = new Date(sub.current_start * 1000);
+    if (sub.current_end)   updateFields.currentEnd   = new Date(sub.current_end   * 1000);
+    if (sub.charge_at)     updateFields.nextChargeAt = new Date(sub.charge_at     * 1000);
 
-      updateFields.currentStart =
-        new Date(
-          sub.current_start * 1000
-        );
-    }
-
-    if (sub.current_end) {
-
-      updateFields.currentEnd =
-        new Date(
-          sub.current_end * 1000
-        );
-    }
-
-    if (sub.charge_at) {
-
-      updateFields.nextChargeAt =
-        new Date(
-          sub.charge_at * 1000
-        );
-    }
-
-    console.log(
-      "Dates:",
-      updateFields.currentStart,
-      "→",
-      updateFields.currentEnd
-    );
+    console.log("Dates:", updateFields.currentStart, "→", updateFields.currentEnd);
 
   } catch (err) {
-
-    console.error(
-      "Fetch subscription error:",
-      err.message
-    );
+    console.error("Fetch subscription error:", err.message);
   }
 
   await Payment.updateOne(
-    {
-      subscriptionId:
-        payment.subscription_id,
-    },
+    { subscriptionId: payment.subscription_id },
     updateFields
   );
 }
 
 /* ======================================================
    PAYMENT FAILED
+   Fires when auto-debit fails (e.g. card declined).
+   Don't overwrite halted status.
 ====================================================== */
+
 async function handlePaymentFailed(payment) {
 
-  console.log(
-    "Payment Failed:",
-    payment.id
-  );
+  console.log("Payment Failed:", payment.id);
 
-  const existing =
-    await Payment.findOne({
-      subscriptionId:
-        payment.subscription_id,
-    });
+  const existing = await Payment.findOne({
+    subscriptionId: payment.subscription_id,
+  });
 
-  // AGAR ALREADY HALTED HAI
-  // TO FAILED MAT KARO
-  if (
-    existing &&
-    existing.status === "halted"
-  ) {
+  // If already halted, don't downgrade to failed
+  if (existing && existing.status === "halted") {
+    console.log("Already halted — skipping failed update");
     return;
   }
 
   await Payment.updateOne(
-    {
-      subscriptionId:
-        payment.subscription_id,
-    },
-    {
-      status: "failed",
-      failedAt: new Date(),
-    }
+    { subscriptionId: payment.subscription_id },
+    { status: "failed", failedAt: new Date() }
   );
 }
+
 /* ======================================================
    SUBSCRIPTION AUTHENTICATED
+   Fires when user successfully links their card/UPI.
+   This is the START of the 7-day trial for new users.
+   For returning users (trial: "false"), no trial logic.
 ====================================================== */
-async function handleSubscriptionAuthenticated(
-  subscription
-) {
 
-  console.log(
-    "Subscription Authenticated:",
-    subscription.id
-  );
+async function handleSubscriptionAuthenticated(subscription) {
 
-  const updateFields = {
+  console.log("Subscription Authenticated:", subscription.id);
 
-    status: "authenticated",
+  const dbRecord = await Payment.findOne({ subscriptionId: subscription.id });
 
-    // TRIAL STARTS NOW
-    trialStart: new Date(),
-
-    // 7 DAYS FREE TRIAL
-    trialEnd: new Date(
-      Date.now() +
-      7 * 24 * 60 * 60 * 1000
-    ),
-
-    // VERY IMPORTANT
-    // FREE TRIAL USED
-    trialUsed: true,
-  };
-
-  if (subscription.current_start) {
-
-    updateFields.currentStart =
-      new Date(
-        subscription.current_start * 1000
-      );
+  if (!dbRecord) {
+    console.log("No DB record found for:", subscription.id);
+    return;
   }
 
-  if (subscription.current_end) {
+  /* ============================================
+     Check the notes flag we set at creation time
+     trial: "true"  → new user, give free trial
+     trial: "false" → returning user, no trial
+  ============================================ */
 
-    updateFields.currentEnd =
-      new Date(
-        subscription.current_end * 1000
-      );
+  const isTrial = subscription.notes?.trial === "true";
+
+  const updateFields = { status: "authenticated" };
+
+  if (isTrial) {
+
+    // ✅ Trial starts NOW (card linked moment)
+    // ✅ Trial ends 7 days later
+    // ✅ First real charge happens after trialEnd (Razorpay uses start_at)
+    updateFields.trialStart = new Date();
+    updateFields.trialEnd   = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    updateFields.trialUsed  = true;   // Lock: this user can never get trial again
+
+    console.log("Trial started. Ends:", updateFields.trialEnd);
+
+  } else {
+
+    // Returning paid user — mark trialUsed true as a safety measure
+    // (it should already be true, but belt-and-suspenders)
+    updateFields.trialUsed = true;
+
+    console.log("Non-trial subscription authenticated");
   }
 
-  if (subscription.charge_at) {
-
-    updateFields.nextChargeAt =
-      new Date(
-        subscription.charge_at * 1000
-      );
-  }
+  // Store Razorpay's own dates too (may be null during trial period)
+  if (subscription.current_start) updateFields.currentStart = new Date(subscription.current_start * 1000);
+  if (subscription.current_end)   updateFields.currentEnd   = new Date(subscription.current_end   * 1000);
+  if (subscription.charge_at)     updateFields.nextChargeAt = new Date(subscription.charge_at     * 1000);
 
   await Payment.updateOne(
-    {
-      subscriptionId:
-        subscription.id,
-    },
+    { subscriptionId: subscription.id },
     updateFields
   );
 }
 
-
 /* ======================================================
    SUBSCRIPTION ACTIVATED
+   Fires when first payment is collected and sub goes live.
+   For trial users: fires after 7-day trial ends + debit OK.
+   For direct users: fires on first successful charge.
 ====================================================== */
 
-async function handleSubscriptionActivated(
-  subscription
-) {
+async function handleSubscriptionActivated(subscription) {
 
-  console.log(
-    "Subscription Activated:",
-    subscription.id
-  );
+  console.log("Subscription Activated:", subscription.id);
 
-  const updateFields = {
+  const updateFields = { status: "active" };
 
-    status: "active",
-  };
+  if (subscription.current_start) updateFields.currentStart = new Date(subscription.current_start * 1000);
+  if (subscription.current_end)   updateFields.currentEnd   = new Date(subscription.current_end   * 1000);
+  if (subscription.charge_at)     updateFields.nextChargeAt = new Date(subscription.charge_at     * 1000);
 
-  if (subscription.current_start) {
-
-    updateFields.currentStart =
-      new Date(
-        subscription.current_start * 1000
-      );
-  }
-
-  if (subscription.current_end) {
-
-    updateFields.currentEnd =
-      new Date(
-        subscription.current_end * 1000
-      );
-  }
-
-  if (subscription.charge_at) {
-
-    updateFields.nextChargeAt =
-      new Date(
-        subscription.charge_at * 1000
-      );
-  }
-
-  console.log(
-    "Activated dates:",
-    updateFields.currentStart,
-    "→",
-    updateFields.currentEnd
-  );
+  console.log("Activated:", updateFields.currentStart, "→", updateFields.currentEnd);
 
   await Payment.updateOne(
-    {
-      subscriptionId:
-        subscription.id,
-    },
+    { subscriptionId: subscription.id },
     updateFields
   );
 }
 
 /* ======================================================
    SUBSCRIPTION CHARGED
+   Fires on every successful recurring charge.
+   Updates billing cycle dates so the user stays active.
 ====================================================== */
 
-async function handleSubscriptionCharged(
-  payment,
-  subscription
-) {
+async function handleSubscriptionCharged(payment, subscription) {
 
-  console.log(
-    "Subscription Charged:",
-    payment.id
-  );
+  console.log("Subscription Charged:", payment.id);
 
   const updateFields = {
-
     paymentId: payment.id,
-
     status: "active",
   };
 
-  if (subscription?.current_start) {
-
-    updateFields.currentStart =
-      new Date(
-        subscription.current_start * 1000
-      );
-  }
-
-  if (subscription?.current_end) {
-
-    updateFields.currentEnd =
-      new Date(
-        subscription.current_end * 1000
-      );
-  }
-
-  if (subscription?.charge_at) {
-
-    updateFields.nextChargeAt =
-      new Date(
-        subscription.charge_at * 1000
-      );
-  }
+  if (subscription?.current_start) updateFields.currentStart = new Date(subscription.current_start * 1000);
+  if (subscription?.current_end)   updateFields.currentEnd   = new Date(subscription.current_end   * 1000);
+  if (subscription?.charge_at)     updateFields.nextChargeAt = new Date(subscription.charge_at     * 1000);
 
   await Payment.updateOne(
-    {
-      subscriptionId:
-        payment.subscription_id,
-    },
+    { subscriptionId: payment.subscription_id },
     updateFields
   );
 }
 
 /* ======================================================
-   SUBSCRIPTION COMPLETED
+   SUBSCRIPTION HALTED
+   Fires when Razorpay retries auto-debit multiple times
+   and all attempts fail. Subscription is suspended.
+   User must update payment method to reactivate.
 ====================================================== */
 
-async function handleSubscriptionCompleted(
-  subscription
-) {
+async function handleSubscriptionHalted(subscription) {
 
-  console.log(
-    "Subscription Completed:",
-    subscription.id
-  );
-
-  // KEEP ACTIVE UNTIL currentEnd EXPIRES
+  console.log("Subscription Halted:", subscription.id);
 
   await Payment.updateOne(
-    {
-      subscriptionId:
-        subscription.id,
-    },
-    {
-      status: "completed",
-    }
+    { subscriptionId: subscription.id },
+    { status: "halted", failedAt: new Date() }
+  );
+}
+
+/* ======================================================
+   SUBSCRIPTION COMPLETED
+   Fires when total_count cycles are exhausted.
+   We keep record as "completed" — frontend can prompt renewal.
+====================================================== */
+
+async function handleSubscriptionCompleted(subscription) {
+
+  console.log("Subscription Completed:", subscription.id);
+
+  await Payment.updateOne(
+    { subscriptionId: subscription.id },
+    { status: "completed" }
   );
 }
 
 /* ======================================================
    SUBSCRIPTION CANCELLED
+   Fires when user or admin cancels the subscription.
+   Access remains until currentEnd date.
 ====================================================== */
 
-async function handleSubscriptionCancelled(
-  subscription
-) {
+async function handleSubscriptionCancelled(subscription) {
 
-  console.log(
-    "Subscription Cancelled:",
-    subscription.id
-  );
+  console.log("Subscription Cancelled:", subscription.id);
 
   await Payment.updateOne(
-    {
-      subscriptionId:
-        subscription.id,
-    },
-    {
-      status: "cancelled",
-
-      cancelledAt: new Date(),
-    }
+    { subscriptionId: subscription.id },
+    { status: "cancelled", cancelledAt: new Date() }
   );
 }
-
-/* ======================================================
-   SUBSCRIPTION HALTED
-====================================================== */
-
-async function handleSubscriptionHalted(
-  subscription
-) {
-
-  console.log(
-    "Subscription Halted:",
-    subscription.id
-  );
-
-
-await Payment.updateOne(
-  {
-    subscriptionId:
-      subscription.id,
-  },
-  {
-    status: "halted",
-    failedAt: new Date(),
-  }
-);
-}
-
-
 
 /* ======================================================
    MIDDLEWARES
-   ====================================================== */
+   Must come after webhook route (raw body needed there)
+====================================================== */
+
 app.use(express.json());
 app.use(cookieParser());
 
 /* ======================================================
    DB
-   ====================================================== */
+====================================================== */
+
 connectDB();
 
 /* ======================================================
    ROUTES
-   ====================================================== */
+====================================================== */
+
 app.use("/api", signupAuth);
 app.use("/api", upload);
 app.use("/api", feedbackRoutes);
@@ -636,14 +389,16 @@ app.use("/api", adminRoutes);
 
 /* ======================================================
    HEALTH CHECK
-   ====================================================== */
+====================================================== */
+
 app.get("/", async (req, res) => {
   res.status(200).send("Server is running");
 });
 
 /* ======================================================
    START
-   ====================================================== */
+====================================================== */
+
 const PORT = process.env.PORT || 5001;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on port ${PORT}`);
