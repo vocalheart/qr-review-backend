@@ -335,7 +335,7 @@ router.post(
 
       /* ============================================
          FIRST TIME USER
-         → 7 DAYS FREE TRIAL
+         → FREE TRIAL
       ============================================ */
 
       if (!alreadyUsedTrial) {
@@ -351,7 +351,6 @@ router.post(
 
               total_count: 100,
 
-              // LINK VALID FOR 15 MINUTES
               expire_by:
                 Math.floor(
                   Date.now() / 1000
@@ -368,7 +367,6 @@ router.post(
 
         /* ============================================
            SAVE SUBSCRIPTION
-           ACTIVE AFTER WEBHOOK ONLY
         ============================================ */
 
         await Payment.create({
@@ -387,15 +385,11 @@ router.post(
 
           type: "subscription",
 
-          // IMPORTANT
           status: "created",
 
           amount,
 
           currency: "INR",
-
-          // ONLY ONE FREE TRIAL
-          trialUsed: true,
         });
 
       } else {
@@ -450,14 +444,11 @@ router.post(
 
           type: "subscription",
 
-          // ACTIVE AFTER PAYMENT ONLY
           status: "created",
 
           amount,
 
           currency: "INR",
-
-          trialUsed: true,
         });
       }
 
@@ -484,6 +475,7 @@ router.post(
     }
   }
 );
+
 
 
 /* ======================================================

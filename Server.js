@@ -343,10 +343,10 @@ async function handlePaymentFailed(payment) {
     }
   );
 }
-
 /* ======================================================
    SUBSCRIPTION AUTHENTICATED
 ====================================================== */
+
 async function handleSubscriptionAuthenticated(
   subscription
 ) {
@@ -355,18 +355,24 @@ async function handleSubscriptionAuthenticated(
     "Subscription Authenticated:",
     subscription.id
   );
-
   const updateFields = {
-
+    // TRIAL ACTIVE
     status: "authenticated",
-
+    // START TRIAL
     trialStart: new Date(),
-
+    // END TRIAL AFTER 7 DAYS
     trialEnd: new Date(
       Date.now() +
       7 * 24 * 60 * 60 * 1000
     ),
+    // VERY IMPORTANT
+    // ONLY ONE FREE TRIAL
+    trialUsed: true,
   };
+
+  /* ============================================
+     SUBSCRIPTION DATES
+  ============================================ */
 
   if (subscription.current_start) {
 
@@ -392,6 +398,10 @@ async function handleSubscriptionAuthenticated(
       );
   }
 
+  /* ============================================
+     UPDATE PAYMENT
+  ============================================ */
+
   await Payment.updateOne(
     {
       subscriptionId:
@@ -399,7 +409,12 @@ async function handleSubscriptionAuthenticated(
     },
     updateFields
   );
+
+  console.log(
+    "Trial Activated Successfully"
+  );
 }
+
 
 /* ======================================================
    SUBSCRIPTION ACTIVATED

@@ -43,7 +43,13 @@ const paymentSchema = new mongoose.Schema(
 
     planType: {
       type: String,
-      enum: ["monthly", "quarterly", "yearly"],
+
+      enum: [
+        "monthly",
+        "quarterly",
+        "yearly",
+      ],
+
       default: null,
     },
 
@@ -57,7 +63,7 @@ const paymentSchema = new mongoose.Schema(
     ========================================= */
 
     amount: {
-      type: Number, // amount in paise
+      type: Number,
       required: true,
     },
 
@@ -68,7 +74,12 @@ const paymentSchema = new mongoose.Schema(
 
     type: {
       type: String,
-      enum: ["order", "subscription"],
+
+      enum: [
+        "order",
+        "subscription",
+      ],
+
       required: true,
     },
 
@@ -127,7 +138,8 @@ const paymentSchema = new mongoose.Schema(
       default: null,
     },
 
-    // ONLY ONE FREE TRIAL PER USER
+    // VERY IMPORTANT
+    // ONLY ONE FREE TRIAL
     trialUsed: {
       type: Boolean,
       default: false,
@@ -148,7 +160,7 @@ const paymentSchema = new mongoose.Schema(
     },
 
     /* =========================================
-       EXTRA INFO
+       EXTRA
     ========================================= */
 
     notes: {
@@ -156,7 +168,9 @@ const paymentSchema = new mongoose.Schema(
       default: {},
     },
 
-    razorpayCustomerId: {type: String,default: null,
+    razorpayCustomerId: {
+      type: String,
+      default: null,
     },
   },
 
@@ -164,6 +178,11 @@ const paymentSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
-const Payment = mongoose.model("Payment",paymentSchema);
+
+const Payment =
+  mongoose.model(
+    "Payment",
+    paymentSchema
+  );
 
 export default Payment;
