@@ -324,7 +324,7 @@ router.post("/create-subscription", authMiddleware, async (req, res) => {
 
         type: "subscription",
 
-        status: "authenticated",
+        status: "created",
 
         amount,
 
