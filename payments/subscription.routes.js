@@ -96,6 +96,7 @@ router.get("/admin/get-plans", authMiddleware, async (req, res) => {
 /* ======================================================
    USER – CREATE SUBSCRIPTION
 ====================================================== */
+
 router.post(
   "/create-subscription",
   authMiddleware,
@@ -334,7 +335,7 @@ router.post(
 
       /* ============================================
          FIRST TIME USER
-         → FREE TRIAL
+         → 7 DAYS FREE TRIAL
       ============================================ */
 
       if (!alreadyUsedTrial) {
@@ -394,13 +395,8 @@ router.post(
           type: "subscription",
 
           status: "created",
-
           amount,
-
           currency: "INR",
-
-          // VERY IMPORTANT
-          trialUsed: true,
         });
 
       } else {
@@ -419,13 +415,6 @@ router.post(
               customer_notify: 1,
 
               total_count: 100,
-
-              // PAYMENT LINK EXPIRE IN 15 MIN
-              expire_by:
-                Math.floor(
-                  Date.now() / 1000
-                ) +
-                (15 * 60),
 
               notify_info: {
 
@@ -468,8 +457,6 @@ router.post(
           amount,
 
           currency: "INR",
-
-          trialUsed: true,
         });
       }
 
@@ -496,6 +483,7 @@ router.post(
     }
   }
 );
+
 
 /* ======================================================
    USER – SUBSCRIPTION STATUS

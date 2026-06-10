@@ -359,7 +359,6 @@ async function handlePaymentFailed(payment) {
 /* ======================================================
    SUBSCRIPTION AUTHENTICATED
 ====================================================== */
-
 async function handleSubscriptionAuthenticated(
   subscription
 ) {
@@ -368,24 +367,24 @@ async function handleSubscriptionAuthenticated(
     "Subscription Authenticated:",
     subscription.id
   );
+
   const updateFields = {
-    // TRIAL ACTIVE
+
     status: "authenticated",
-    // START TRIAL
+
+    // TRIAL STARTS NOW
     trialStart: new Date(),
-    // END TRIAL AFTER 7 DAYS
+
+    // 7 DAYS FREE TRIAL
     trialEnd: new Date(
       Date.now() +
       7 * 24 * 60 * 60 * 1000
     ),
+
     // VERY IMPORTANT
-    // ONLY ONE FREE TRIAL
+    // FREE TRIAL USED
     trialUsed: true,
   };
-
-  /* ============================================
-     SUBSCRIPTION DATES
-  ============================================ */
 
   if (subscription.current_start) {
 
@@ -411,20 +410,12 @@ async function handleSubscriptionAuthenticated(
       );
   }
 
-  /* ============================================
-     UPDATE PAYMENT
-  ============================================ */
-
   await Payment.updateOne(
     {
       subscriptionId:
         subscription.id,
     },
     updateFields
-  );
-
-  console.log(
-    "Trial Activated Successfully"
   );
 }
 
