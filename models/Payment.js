@@ -1,4 +1,3 @@
-
 import mongoose from "mongoose";
 
 const paymentSchema = new mongoose.Schema(
@@ -58,7 +57,7 @@ const paymentSchema = new mongoose.Schema(
     ========================================= */
 
     amount: {
-      type: Number, // paise
+      type: Number, // amount in paise
       required: true,
     },
 
@@ -114,6 +113,10 @@ const paymentSchema = new mongoose.Schema(
       default: null,
     },
 
+    /* =========================================
+       FREE TRIAL
+    ========================================= */
+
     trialStart: {
       type: Date,
       default: null,
@@ -123,6 +126,16 @@ const paymentSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+
+    // ONLY ONE FREE TRIAL PER USER
+    trialUsed: {
+      type: Boolean,
+      default: false,
+    },
+
+    /* =========================================
+       FAILURE / CANCEL INFO
+    ========================================= */
 
     cancelledAt: {
       type: Date,
@@ -135,7 +148,7 @@ const paymentSchema = new mongoose.Schema(
     },
 
     /* =========================================
-       EXTRA
+       EXTRA INFO
     ========================================= */
 
     notes: {
@@ -143,9 +156,7 @@ const paymentSchema = new mongoose.Schema(
       default: {},
     },
 
-    razorpayCustomerId: {
-      type: String,
-      default: null,
+    razorpayCustomerId: {type: String,default: null,
     },
   },
 
@@ -153,7 +164,6 @@ const paymentSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
-
-const Payment = mongoose.model("Payment", paymentSchema);
+const Payment = mongoose.model("Payment",paymentSchema);
 
 export default Payment;

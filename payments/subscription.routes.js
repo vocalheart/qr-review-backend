@@ -97,69 +97,61 @@ router.get("/admin/get-plans", authMiddleware, async (req, res) => {
    USER – CREATE SUBSCRIPTION
 ====================================================== */
 
-router.post(
-  "/create-subscription",
-  authMiddleware,
-  async (req, res) => {
+router.post("/create-subscription", authMiddleware, async (req, res) => {
     try {
-
       const { planType } = req.body;
-
       let planId;
       let amount;
-
       /* ============================================
          PLAN SELECT
       ============================================ */
 
       if (planType === "monthly") {
-
         planId = process.env.RAZORPAY_MONTHLY_PLAN_ID;
         amount = 119900;
-
       } else if (planType === "quarterly") {
-
         planId = process.env.RAZORPAY_3MONTH_PLAN_ID;
         amount = 299900;
-
       } else if (planType === "yearly") {
-
         planId = process.env.RAZORPAY_YEARLY_PLAN_ID;
         amount = 699900;
-
       } else {
-
         return res.status(400).json({
           success: false,
           message: "Invalid plan type",
         });
       }
 
+      const today = new Date();
+
       /* ============================================
          CHECK ACTIVE / TRIAL SUBSCRIPTION
       ============================================ */
 
-      const today = new Date();
+      const activeSubscription =
+        await Payment.findOne({
 
-      const activeSubscription = await Payment.findOne({
-        userId: req.user._id,
-        type: "subscription",
+          userId: req.user._id,
 
-        status: {
-          $in: ["active", "authenticated"],
-        },
+          type: "subscription",
 
-        $or: [
-          {
-            currentEnd: { $gt: today },
+          status: {
+            $in: ["active", "authenticated"],
           },
-          {
-            trialEnd: { $gt: today },
-          },
-        ],
-      });
 
-      // BLOCK IF ALREADY ACTIVE
+          $or: [
+
+            {
+              currentEnd: { $gt: today },
+            },
+
+            {
+              trialEnd: { $gt: today },
+            },
+          ],
+        });
+
+      // BLOCK IF ACTIVE
       if (activeSubscription) {
 
         return res.status(400).json({
@@ -170,12 +162,14 @@ router.post(
       }
 
       /* ============================================
-         AUTO MARK EXPIRED SUBSCRIPTIONS
+         AUTO MARK EXPIRED
       ============================================ */
 
       await Payment.updateMany(
+
         {
           userId: req.user._id,
+
           type: "subscription",
 
           status: {
@@ -183,9 +177,11 @@ router.post(
           },
 
           $or: [
+
             {
               currentEnd: { $lte: today },
             },
+
             {
               trialEnd: { $lte: today },
             },
@@ -203,25 +199,34 @@ router.post(
          PENDING SUBSCRIPTION CHECK
       ============================================ */
 
-      const existing = await Payment.findOne({
-        userId: req.user._id,
-        type: "subscription",
-        status: "created",
-      });
+      const existing =
+        await Payment.findOne({
+
+          userId: req.user._id,
+
+          type: "subscription",
+
+          status: "created",
+        });
 
       if (existing) {
 
         const timeDiff =
-          Date.now() - existing.createdAt.getTime();
+          Date.now() -
+          existing.createdAt.getTime();
 
-        // REUSE LINK WITHIN 5 MINUTES
+        // REUSE EXISTING LINK
         if (timeDiff < 5 * 60 * 1000) {
 
           return res.json({
+
             success: true,
 
             subscription: {
-              short_url: existing.shortUrl,
+
+              short_url:
+                existing.shortUrl,
+
               status: "pending",
             },
           });
@@ -247,74 +252,145 @@ router.post(
 
         // MARK FAILED
         await Payment.updateOne(
-          { _id: existing._id },
+
+          {
+            _id: existing._id,
+          },
 
           {
             status: "failed",
+
             failedAt: new Date(),
           }
         );
       }
 
       /* ============================================
-         7 DAYS FREE TRIAL
+         CHECK TRIAL ALREADY USED
       ============================================ */
 
-      const trialEndUnix =
-        Math.floor(Date.now() / 1000) +
-        7 * 24 * 60 * 60;
+      const alreadyUsedTrial =
+        await Payment.findOne({
 
-      /* ============================================
-         CREATE SUBSCRIPTION
-      ============================================ */
+          userId: req.user._id,
 
-      const subscription =
-        await razorpay.subscriptions.create({
-
-          plan_id: planId,
-
-          customer_notify: 1,
-
-          total_count: 100,
-
-          start_at: trialEndUnix,
-
-          notify_info: {
-            notify_phone: true,
-            notify_email: true,
-          },
+          trialUsed: true,
         });
 
+      let subscription;
+
       /* ============================================
-         SAVE PAYMENT
+         FIRST TIME USER → FREE TRIAL
       ============================================ */
 
-      await Payment.create({
+      if (!alreadyUsedTrial) {
 
-        userId: req.user._id,
+        const trialEndUnix =
+          Math.floor(Date.now() / 1000) +
+          7 * 24 * 60 * 60;
 
-        subscriptionId: subscription.id,
+        subscription =
+          await razorpay.subscriptions.create({
 
-        planId: planId,
+            plan_id: planId,
 
-        planType: planType,
+            customer_notify: 1,
 
-        shortUrl: subscription.short_url,
+            total_count: 100,
 
-        type: "subscription",
+            // 7 DAYS FREE TRIAL
+            start_at: trialEndUnix,
 
-        status: "authenticated",
+            notify_info: {
+              notify_phone: true,
+              notify_email: true,
+            },
+          });
 
-        amount,
+        /* ============================================
+           SAVE TRIAL SUBSCRIPTION
+        ============================================ */
 
-        currency: "INR",
+        await Payment.create({
 
-        trialStart: new Date(),
+          userId: req.user._id,
 
-        trialEnd: new Date(
-          Date.now() + 7 * 24 * 60 * 60 * 1000
-        ),
-      });
+          subscriptionId: subscription.id,
+
+          planId,
+
+          planType,
+
+          shortUrl: subscription.short_url,
+
+          type: "subscription",
+
+          status: "authenticated",
+
+          amount,
+
+          currency: "INR",
+
+          trialStart: new Date(),
+
+          trialEnd: new Date(
+            Date.now() +
+            7 * 24 * 60 * 60 * 1000
+          ),
+
+          // ONLY ONE FREE TRIAL
+          trialUsed: true,
+        });
+
+      } else {
+
+        /* ============================================
+           USER ALREADY USED TRIAL
+           DIRECT PAID SUBSCRIPTION
+        ============================================ */
+
+        subscription =
+          await razorpay.subscriptions.create({
+
+            plan_id: planId,
+
+            customer_notify: 1,
+
+            total_count: 100,
+
+            notify_info: {
+              notify_phone: true,
+              notify_email: true,
+            },
+          });
+
+        /* ============================================
+           SAVE NORMAL SUBSCRIPTION
+        ============================================ */
+
+        await Payment.create({
+
+          userId: req.user._id,
+
+          subscriptionId: subscription.id,
+
+          planId,
+
+          planType,
+
+          shortUrl: subscription.short_url,
+
+          type: "subscription",
+
+          status: "created",
+
+          amount,
+
+          currency: "INR",
+
+          trialUsed: true,
+        });
+      }
 
       return res.json({
         success: true,
@@ -329,12 +405,15 @@ router.post(
       );
 
       return res.status(500).json({
+
         success: false,
+
         message: error.message,
       });
     }
   }
 );
+
 
 /* ======================================================
    USER – SUBSCRIPTION STATUS
