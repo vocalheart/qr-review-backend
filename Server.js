@@ -323,13 +323,27 @@ async function handlePaymentCaptured(payment) {
 /* ======================================================
    PAYMENT FAILED
 ====================================================== */
-
 async function handlePaymentFailed(payment) {
 
   console.log(
     "Payment Failed:",
     payment.id
   );
+
+  const existing =
+    await Payment.findOne({
+      subscriptionId:
+        payment.subscription_id,
+    });
+
+  // AGAR ALREADY HALTED HAI
+  // TO FAILED MAT KARO
+  if (
+    existing &&
+    existing.status === "halted"
+  ) {
+    return;
+  }
 
   await Payment.updateOne(
     {
@@ -338,7 +352,6 @@ async function handlePaymentFailed(payment) {
     },
     {
       status: "failed",
-
       failedAt: new Date(),
     }
   );
