@@ -346,7 +346,6 @@ async function handlePaymentFailed(payment) {
 /* ======================================================
    SUBSCRIPTION AUTHENTICATED
 ====================================================== */
-
 async function handleSubscriptionAuthenticated(
   subscription
 ) {
@@ -359,6 +358,13 @@ async function handleSubscriptionAuthenticated(
   const updateFields = {
 
     status: "authenticated",
+
+    trialStart: new Date(),
+
+    trialEnd: new Date(
+      Date.now() +
+      7 * 24 * 60 * 60 * 1000
+    ),
   };
 
   if (subscription.current_start) {
@@ -527,7 +533,7 @@ async function handleSubscriptionCompleted(
         subscription.id,
     },
     {
-      status: "active",
+      status: "completed",
     }
   );
 }
