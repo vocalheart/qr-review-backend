@@ -32,8 +32,8 @@ app.use(cors({
       callback(new Error("Not allowed by CORS"));
     }
   },
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  credentials: true,
+  methods:        ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  credentials:    true,
   allowedHeaders: ["Content-Type", "Authorization", "Cookie"],
 }));
 
@@ -47,10 +47,9 @@ app.post(
   express.raw({ type: "*/*" }),
   async (req, res) => {
     try {
-
       const razorpaySignature = req.headers["x-razorpay-signature"];
-      const webhookSecret      = process.env.RAZORPAY_WEBHOOK_SECRET;
-      const body               = req.body.toString();
+      const webhookSecret     = process.env.RAZORPAY_WEBHOOK_SECRET;
+      const body              = req.body.toString();
 
       /* ============================================
          VERIFY SIGNATURE
@@ -72,7 +71,6 @@ app.post(
 
       const event = JSON.parse(body);
       console.log("WEBHOOK EVENT:", event.event);
-
       const { payload } = event;
 
       /* ============================================
@@ -141,6 +139,7 @@ app.post(
    PAYMENT CAPTURED
    Fires when Razorpay successfully captures payment.
    This is the main "user is now paid & active" event.
+   ✅ Sets isVisible = true so it appears in history.
 ====================================================== */
 
 async function handlePaymentCaptured(payment) {
@@ -153,8 +152,9 @@ async function handlePaymentCaptured(payment) {
   }
 
   const updateFields = {
-    status: "active",
+    status:    "active",
     paymentId: payment.id,
+    isVisible: true,               // ✅ Now visible in payment history
   };
 
   try {
@@ -181,6 +181,7 @@ async function handlePaymentCaptured(payment) {
    PAYMENT FAILED
    Fires when auto-debit fails (e.g. card declined).
    Don't overwrite halted status.
+   isVisible stays false — failed payments not shown in history.
 ====================================================== */
 
 async function handlePaymentFailed(payment) {
@@ -200,6 +201,7 @@ async function handlePaymentFailed(payment) {
   await Payment.updateOne(
     { subscriptionId: payment.subscription_id },
     { status: "failed", failedAt: new Date() }
+    // isVisible remains false — don't show failed payments in history
   );
 }
 
@@ -207,7 +209,7 @@ async function handlePaymentFailed(payment) {
    SUBSCRIPTION AUTHENTICATED
    Fires when user successfully links their card/UPI.
    This is the START of the 7-day trial for new users.
-   For returning users (trial: "false"), no trial logic.
+   ✅ Sets isVisible = true — card linked = user committed.
 ====================================================== */
 
 async function handleSubscriptionAuthenticated(subscription) {
@@ -229,7 +231,10 @@ async function handleSubscriptionAuthenticated(subscription) {
 
   const isTrial = subscription.notes?.trial === "true";
 
-  const updateFields = { status: "authenticated" };
+  const updateFields = {
+    status:    "authenticated",
+    isVisible: true,               // ✅ Show in history — user has committed
+  };
 
   if (isTrial) {
 
@@ -245,7 +250,6 @@ async function handleSubscriptionAuthenticated(subscription) {
   } else {
 
     // Returning paid user — mark trialUsed true as a safety measure
-    // (it should already be true, but belt-and-suspenders)
     updateFields.trialUsed = true;
 
     console.log("Non-trial subscription authenticated");
@@ -267,13 +271,17 @@ async function handleSubscriptionAuthenticated(subscription) {
    Fires when first payment is collected and sub goes live.
    For trial users: fires after 7-day trial ends + debit OK.
    For direct users: fires on first successful charge.
+   ✅ isVisible already true from authenticated — no change needed.
 ====================================================== */
 
 async function handleSubscriptionActivated(subscription) {
 
   console.log("Subscription Activated:", subscription.id);
 
-  const updateFields = { status: "active" };
+  const updateFields = {
+    status:    "active",
+    isVisible: true,               // ✅ Ensure visible (safety)
+  };
 
   if (subscription.current_start) updateFields.currentStart = new Date(subscription.current_start * 1000);
   if (subscription.current_end)   updateFields.currentEnd   = new Date(subscription.current_end   * 1000);
@@ -291,6 +299,7 @@ async function handleSubscriptionActivated(subscription) {
    SUBSCRIPTION CHARGED
    Fires on every successful recurring charge.
    Updates billing cycle dates so the user stays active.
+   ✅ isVisible = true — recurring charge confirmed.
 ====================================================== */
 
 async function handleSubscriptionCharged(payment, subscription) {
@@ -299,7 +308,8 @@ async function handleSubscriptionCharged(payment, subscription) {
 
   const updateFields = {
     paymentId: payment.id,
-    status: "active",
+    status:    "active",
+    isVisible: true,               // ✅ Each successful charge is visible
   };
 
   if (subscription?.current_start) updateFields.currentStart = new Date(subscription.current_start * 1000);
@@ -326,6 +336,7 @@ async function handleSubscriptionHalted(subscription) {
   await Payment.updateOne(
     { subscriptionId: subscription.id },
     { status: "halted", failedAt: new Date() }
+    // isVisible unchanged — was true if previously active
   );
 }
 
@@ -342,6 +353,7 @@ async function handleSubscriptionCompleted(subscription) {
   await Payment.updateOne(
     { subscriptionId: subscription.id },
     { status: "completed" }
+    // isVisible unchanged — was already true
   );
 }
 
@@ -358,6 +370,7 @@ async function handleSubscriptionCancelled(subscription) {
   await Payment.updateOne(
     { subscriptionId: subscription.id },
     { status: "cancelled", cancelledAt: new Date() }
+    // isVisible unchanged — keep in history so user can see cancelled record
   );
 }
 

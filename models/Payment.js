@@ -43,13 +43,7 @@ const paymentSchema = new mongoose.Schema(
 
     planType: {
       type: String,
-
-      enum: [
-        "monthly",
-        "quarterly",
-        "yearly",
-      ],
-
+      enum: ["monthly", "quarterly", "yearly"],
       default: null,
     },
 
@@ -74,12 +68,7 @@ const paymentSchema = new mongoose.Schema(
 
     type: {
       type: String,
-
-      enum: [
-        "order",
-        "subscription",
-      ],
-
+      enum: ["order", "subscription"],
       required: true,
     },
 
@@ -89,7 +78,6 @@ const paymentSchema = new mongoose.Schema(
 
     status: {
       type: String,
-
       enum: [
         "created",
         "authenticated",
@@ -101,8 +89,18 @@ const paymentSchema = new mongoose.Schema(
         "failed",
         "expired",
       ],
-
       default: "created",
+    },
+
+    /* =========================================
+       HISTORY VISIBILITY
+       false = pending/abandoned (hidden from history)
+       true  = payment confirmed (show in history)
+    ========================================= */
+
+    isVisible: {
+      type: Boolean,
+      default: false,
     },
 
     /* =========================================
@@ -138,8 +136,7 @@ const paymentSchema = new mongoose.Schema(
       default: null,
     },
 
-    // VERY IMPORTANT
-    // ONLY ONE FREE TRIAL
+    // VERY IMPORTANT — ONLY ONE FREE TRIAL PER USER LIFETIME
     trialUsed: {
       type: Boolean,
       default: false,
@@ -173,16 +170,11 @@ const paymentSchema = new mongoose.Schema(
       default: null,
     },
   },
-
   {
     timestamps: true,
   }
 );
 
-const Payment =
-  mongoose.model(
-    "Payment",
-    paymentSchema
-  );
+const Payment = mongoose.model("Payment", paymentSchema);
 
 export default Payment;

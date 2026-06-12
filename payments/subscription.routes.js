@@ -6,6 +6,20 @@ import { authMiddleware } from "../middleware/authMiddleware.js";
 const router = express.Router();
 
 /* ======================================================
+   PLAN → total_count MAP
+   Keep end_time within Razorpay's valid range (max year 2121)
+   monthly  × 120 = 10 years  ✅
+   quarterly× 40  = 10 years  ✅
+   yearly   × 10  = 10 years  ✅  ← THIS was the bug (100 × yearly exceeded limit)
+====================================================== */
+
+const PLAN_TOTAL_COUNT = {
+  monthly:   120,
+  quarterly: 40,
+  yearly:    10,
+};
+
+/* ======================================================
    ADMIN – CREATE ALL PLANS
 ====================================================== */
 
@@ -64,7 +78,6 @@ router.get("/admin/get-plans", authMiddleware, async (req, res) => {
   try {
 
     const plans = await razorpay.plans.all({ count: 50 });
-
     res.json({ success: true, plans });
 
   } catch (error) {
@@ -115,7 +128,7 @@ router.post("/create-subscription", authMiddleware, async (req, res) => {
       status: { $in: ["active", "authenticated"] },
       $or: [
         { currentEnd: { $gt: today } },
-        { trialEnd: { $gt: today } },
+        { trialEnd:   { $gt: today } },
       ],
     });
 
@@ -137,7 +150,7 @@ router.post("/create-subscription", authMiddleware, async (req, res) => {
         status: { $in: ["active", "authenticated"] },
         $or: [
           { currentEnd: { $lte: today } },
-          { trialEnd: { $lte: today } },
+          { trialEnd:   { $lte: today } },
         ],
       },
       { $set: { status: "expired" } }
@@ -197,6 +210,13 @@ router.post("/create-subscription", authMiddleware, async (req, res) => {
       trialUsed: true,
     });
 
+    /* ============================================
+       total_count — safe values per plan type
+       Prevents Razorpay "end_time out of range" error
+    ============================================ */
+
+    const totalCount = PLAN_TOTAL_COUNT[planType];
+
     let subscription;
 
     /* ============================================
@@ -208,10 +228,8 @@ router.post("/create-subscription", authMiddleware, async (req, res) => {
 
     if (!alreadyUsedTrial) {
 
-      // Razorpay valid Unix timestamp range: 946684800 (year 2000) → 4765046400 (year 2121)
-      // Use server time (Date.now()), never trust client time
-      const RAZORPAY_MIN_TS = 946684800;
-      const RAZORPAY_MAX_TS = 4765046400;
+      const RAZORPAY_MIN_TS    = 946684800;
+      const RAZORPAY_MAX_TS    = 4765046400;
       const SEVEN_DAYS_SECONDS = 7 * 24 * 60 * 60;
 
       const nowSeconds   = Math.floor(Date.now() / 1000);
@@ -226,35 +244,40 @@ router.post("/create-subscription", authMiddleware, async (req, res) => {
         });
       }
 
-      console.log("Trial start_at (Unix):", trialStartAt, "| Human:", new Date(trialStartAt * 1000).toISOString());
+      console.log(
+        "Trial start_at (Unix):", trialStartAt,
+        "| Human:", new Date(trialStartAt * 1000).toISOString(),
+        "| total_count:", totalCount
+      );
 
       subscription = await razorpay.subscriptions.create({
-        plan_id: planId,
+        plan_id:         planId,
         customer_notify: 1,
-        total_count: 100,
-        start_at: trialStartAt,   // First debit after 7 days
+        total_count:     totalCount,   //  Safe value — no end_time overflow
+        start_at:        trialStartAt, // First debit after 7 days
         notify_info: {
           notify_phone: true,
           notify_email: true,
         },
         notes: {
           userId: req.user._id.toString(),
-          trial: "true",           // Flag for webhook to know this is a trial sub
+          trial:  "true",              // Webhook uses this flag
         },
       });
 
       await Payment.create({
-        userId: req.user._id,
+        userId:         req.user._id,
         subscriptionId: subscription.id,
         planId,
         planType,
-        shortUrl: subscription.short_url,
-        type: "subscription",
-        status: "created",
+        shortUrl:       subscription.short_url,
+        type:           "subscription",
+        status:         "created",
         amount,
-        currency: "INR",
-        // trialUsed is set to true ONLY after webhook confirms authentication
-        // This prevents false-marking if user abandons checkout
+        currency:       "INR",
+        isVisible:      false,         // Hidden until webhook confirms
+        // trialUsed set to true ONLY after webhook confirms authentication
+        // Prevents false-marking if user abandons checkout
       });
 
     } else {
@@ -265,29 +288,30 @@ router.post("/create-subscription", authMiddleware, async (req, res) => {
       ============================================ */
 
       subscription = await razorpay.subscriptions.create({
-        plan_id: planId,
+        plan_id:         planId,
         customer_notify: 1,
-        total_count: 100,
+        total_count:     totalCount,   // ✅ Safe value
         notify_info: {
           notify_phone: true,
           notify_email: true,
         },
         notes: {
           userId: req.user._id.toString(),
-          trial: "false",          // Flag for webhook: no trial
+          trial:  "false",             // Webhook uses this flag
         },
       });
 
       await Payment.create({
-        userId: req.user._id,
+        userId:         req.user._id,
         subscriptionId: subscription.id,
         planId,
         planType,
-        shortUrl: subscription.short_url,
-        type: "subscription",
-        status: "created",
+        shortUrl:       subscription.short_url,
+        type:           "subscription",
+        status:         "created",
         amount,
-        currency: "INR",
+        currency:       "INR",
+        isVisible:      false,         // Hidden until webhook confirms
       });
     }
 
@@ -308,7 +332,7 @@ router.get("/subscription-status", authMiddleware, async (req, res) => {
 
     const sub = await Payment.findOne({
       userId: req.user._id,
-      type: "subscription",
+      type:   "subscription",
     }).sort({ createdAt: -1 });
 
     if (!sub) {
@@ -327,35 +351,12 @@ router.get("/subscription-status", authMiddleware, async (req, res) => {
     }
 
     /* ============================================
-       AUTO EXPIRE: trial sub past trialEnd
-       Also auto-cancel on Razorpay side so no
-       accidental charge after trial if user forgot
-    ============================================ */
-
-    // if (
-    //   sub.status === "authenticated" &&
-    //   sub.trialEnd &&
-    //   new Date(sub.trialEnd) <= now
-    // ) {
-    //   sub.status = "expired";
-    //   await sub.save();
-
-    //   // Cancel on Razorpay too — safety net
-    //   // (Razorpay should auto-debit, but if halted/failed, ensure no ghost sub)
-    //   try {
-    //     await razorpay.subscriptions.cancel(sub.subscriptionId);
-    //   } catch (err) {
-    //     console.log("Auto-cancel after trial expire error:", err.message);
-    //   }
-    // }
-
-    /* ============================================
        REMAINING TIME
     ============================================ */
 
-    let daysRemaining = 0;
+    let daysRemaining  = 0;
     let hoursRemaining = 0;
-    let expiryDate = null;
+    let expiryDate     = null;
 
     // TRIAL USER
     if (sub.status === "authenticated" && sub.trialEnd) {
@@ -370,7 +371,7 @@ router.get("/subscription-status", authMiddleware, async (req, res) => {
     if (expiryDate) {
       const diff = expiryDate - now;
       if (diff > 0) {
-        daysRemaining = Math.floor(diff / (1000 * 60 * 60 * 24));
+        daysRemaining  = Math.floor(diff / (1000 * 60 * 60 * 24));
         hoursRemaining = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
       }
     }
@@ -380,27 +381,27 @@ router.get("/subscription-status", authMiddleware, async (req, res) => {
     ============================================ */
 
     const planMap = {
-      [process.env.RAZORPAY_MONTHLY_PLAN_ID]: { label: "Monthly Plan", price: "₹1199" },
+      [process.env.RAZORPAY_MONTHLY_PLAN_ID]: { label: "Monthly Plan",  price: "₹1199" },
       [process.env.RAZORPAY_3MONTH_PLAN_ID]:  { label: "3 Months Plan", price: "₹2999" },
-      [process.env.RAZORPAY_YEARLY_PLAN_ID]:  { label: "1 Year Plan", price: "₹6999" },
+      [process.env.RAZORPAY_YEARLY_PLAN_ID]:  { label: "1 Year Plan",   price: "₹6999" },
     };
 
     const planInfo = planMap[sub.planId] || { label: "Premium Plan", price: "" };
 
     return res.json({
-      success: true,
-      status: sub.status,
-      planId: sub.planId,
-      planType: sub.planType || null,
-      planLabel: planInfo.label,
-      planPrice: planInfo.price,
+      success:      true,
+      status:       sub.status,
+      planId:       sub.planId,
+      planType:     sub.planType     || null,
+      planLabel:    planInfo.label,
+      planPrice:    planInfo.price,
       daysRemaining,
       hoursRemaining,
-      currentStart:  sub.currentStart  || null,
-      currentEnd:    sub.currentEnd    || null,
-      nextChargeAt:  sub.nextChargeAt  || null,
-      trialStart:    sub.trialStart    || null,
-      trialEnd:      sub.trialEnd      || null,
+      currentStart: sub.currentStart || null,
+      currentEnd:   sub.currentEnd   || null,
+      nextChargeAt: sub.nextChargeAt || null,
+      trialStart:   sub.trialStart   || null,
+      trialEnd:     sub.trialEnd     || null,
     });
 
   } catch (error) {
@@ -411,14 +412,17 @@ router.get("/subscription-status", authMiddleware, async (req, res) => {
 
 /* ======================================================
    USER – SUBSCRIPTION HISTORY
+   Only show records where isVisible = true
+   (i.e. payment was actually confirmed by Razorpay webhook)
 ====================================================== */
 
 router.get("/subscription-history", authMiddleware, async (req, res) => {
   try {
 
     const history = await Payment.find({
-      userId: req.user._id,
-      type: "subscription",
+      userId:    req.user._id,
+      type:      "subscription",
+      isVisible: true,               // ✅ Only confirmed payments
     }).sort({ createdAt: -1 });
 
     res.json({ success: true, history });

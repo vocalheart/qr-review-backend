@@ -120,13 +120,11 @@ router.get("/my-qr", authMiddleware, async (req, res) => {
 
 
 // =============================================================
-//  DELETE QR (From S3 + DB)
+//  ----------------DELETE QR (From S3 + DB)--------------------
 // =============================================================
-
 router.delete("/delete-qr", authMiddleware, async (req, res) => {
   try {
     const qr = await QrImage.findOne({ user: req.user._id });
-
     if (!qr) {
       return res.status(404).json({
         success: false,
@@ -146,7 +144,6 @@ router.delete("/delete-qr", authMiddleware, async (req, res) => {
         Key: qr.s3Key,
       })
     );
-
     // Delete from DB
     await QrImage.deleteOne({ _id: qr._id });
 
